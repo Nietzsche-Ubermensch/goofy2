@@ -1,0 +1,428 @@
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600;700&display=swap');
+
+/* ==========================================================================
+   Card Suite Unified — Design System Tokens & Base Styles
+   Ported verbatim from card-suite-unified (frontend/tailwind.config.js, frontend/src/index.css)
+   ========================================================================== */
+
+:root {
+  /* Surfaces */
+  --csu-surface-app: #000000;
+  --csu-surface-header: #0d0d0d;
+  --csu-surface-sidebar: #080808;
+  --csu-surface-panel: #121212;
+  --csu-surface-hover: #1c1c1c;
+  --csu-surface-active: #262626;
+  --csu-surface-border: #222222;
+
+  /* Accent */
+  --csu-accent-amber: #ffb000;
+  --csu-accent-amber-hover: #ffcc4d;
+  --csu-accent-amber-text: #000000;
+  --csu-accent-amber-subtle: rgba(255, 176, 0, 0.12);
+  --csu-accent-amber-border: rgba(255, 176, 0, 0.4);
+
+  /* Status Colors */
+  --csu-status-processing: #00ffff;
+  --csu-status-processing-bg: rgba(0, 255, 255, 0.1);
+  --csu-status-complete: #ffffff;
+  --csu-status-complete-bg: rgba(255, 255, 255, 0.1);
+  --csu-status-review: #ffd700;
+  --csu-status-review-bg: rgba(255, 215, 0, 0.12);
+  --csu-status-failed: #ff3333;
+  --csu-status-failed-bg: rgba(255, 51, 51, 0.12);
+  --csu-status-queued: #888888;
+  --csu-status-queued-bg: rgba(136, 136, 136, 0.12);
+
+  /* Typography */
+  --csu-font-ui: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  --csu-font-mono: 'JetBrains Mono', ui-monospace, SFMono-Regular, monospace;
+
+  /* Radii */
+  --csu-radius-panel: 8px;
+  --csu-radius-control: 4px;
+
+  /* Spacing Scale */
+  --csu-space-1: 4px;
+  --csu-space-2: 8px;
+  --csu-space-3: 12px;
+  --csu-space-4: 16px;
+  --csu-space-6: 24px;
+  --csu-space-8: 32px;
+}
+
+/* Base Body Application Surface */
+body.csu-app,
+.csu-workspace {
+  background-color: var(--csu-surface-app);
+  color: #ededed;
+  font-family: var(--csu-font-ui);
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+/* Mono Elements */
+.csu-mono,
+.csu-workspace code,
+.csu-workspace pre,
+.csu-metric-value,
+.csu-dimension-tag {
+  font-family: var(--csu-font-mono);
+}
+
+/* Panel Component */
+.csu-panel {
+  background-color: var(--csu-surface-panel);
+  border: 1px solid var(--csu-surface-border);
+  border-radius: var(--csu-radius-panel);
+  padding: var(--csu-space-4);
+  transition: border-color 0.15s ease, background-color 0.15s ease;
+}
+
+.csu-panel-accent {
+  background-color: var(--csu-surface-panel);
+  border: 1px solid var(--csu-accent-amber);
+  border-radius: var(--csu-radius-panel);
+  padding: var(--csu-space-4);
+  box-shadow: 0 0 0 1px var(--csu-accent-amber-subtle), 0 4px 20px rgba(255, 176, 0, 0.08);
+}
+
+/* Button Component */
+.csu-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-family: var(--csu-font-ui);
+  font-weight: 600;
+  border-radius: var(--csu-radius-control);
+  transition: all 0.15s ease;
+  cursor: pointer;
+  border: 1px solid transparent;
+  gap: var(--csu-space-2);
+  white-space: nowrap;
+  user-select: none;
+}
+
+.csu-btn:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+  pointer-events: none;
+}
+
+/* Button Sizes */
+.csu-btn-md {
+  height: 36px;
+  padding: 0 var(--csu-space-4);
+  font-size: 13px;
+}
+
+.csu-btn-sm {
+  height: 28px;
+  padding: 0 var(--csu-space-3);
+  font-size: 11px;
+}
+
+/* Button Variants */
+.csu-btn-primary {
+  background-color: var(--csu-accent-amber);
+  color: var(--csu-accent-amber-text);
+  border-color: var(--csu-accent-amber);
+}
+
+.csu-btn-primary:hover:not(:disabled) {
+  background-color: var(--csu-accent-amber-hover);
+  border-color: var(--csu-accent-amber-hover);
+}
+
+.csu-btn-secondary {
+  background-color: var(--csu-surface-hover);
+  color: #ededed;
+  border-color: var(--csu-surface-border);
+}
+
+.csu-btn-secondary:hover:not(:disabled) {
+  background-color: var(--csu-surface-active);
+  border-color: #333333;
+}
+
+.csu-btn-ghost {
+  background-color: transparent;
+  color: #a0a0a0;
+  border-color: transparent;
+}
+
+.csu-btn-ghost:hover:not(:disabled) {
+  background-color: var(--csu-surface-hover);
+  color: #ededed;
+}
+
+.csu-btn-danger {
+  background-color: rgba(255, 51, 51, 0.15);
+  color: #ff6666;
+  border-color: rgba(255, 51, 51, 0.35);
+}
+
+.csu-btn-danger:hover:not(:disabled) {
+  background-color: #ff3333;
+  color: #000000;
+  border-color: #ff3333;
+}
+
+/* Status Pill Component */
+.csu-status-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 2px 8px;
+  border-radius: var(--csu-radius-control);
+  font-family: var(--csu-font-mono);
+  font-size: 11px;
+  font-weight: 500;
+  line-height: 1.4;
+  letter-spacing: 0.02em;
+  border: 1px solid transparent;
+}
+
+.csu-status-pill-queued {
+  background-color: var(--csu-status-queued-bg);
+  color: var(--csu-status-queued);
+  border-color: rgba(136, 136, 136, 0.3);
+}
+
+.csu-status-pill-processing {
+  background-color: var(--csu-status-processing-bg);
+  color: var(--csu-status-processing);
+  border-color: rgba(0, 255, 255, 0.35);
+}
+
+.csu-status-pill-complete {
+  background-color: var(--csu-status-complete-bg);
+  color: var(--csu-status-complete);
+  border-color: rgba(255, 255, 255, 0.4);
+}
+
+.csu-status-pill-review-needed {
+  background-color: var(--csu-status-review-bg);
+  color: var(--csu-status-review);
+  border-color: rgba(255, 215, 0, 0.35);
+}
+
+.csu-status-pill-failed {
+  background-color: var(--csu-status-failed-bg);
+  color: var(--csu-status-failed);
+  border-color: rgba(255, 51, 51, 0.35);
+}
+
+/* Progress Bar Component */
+.csu-progress-track {
+  width: 100%;
+  height: 6px;
+  background-color: var(--csu-surface-hover);
+  border-radius: var(--csu-radius-control);
+  overflow: hidden;
+  position: relative;
+}
+
+.csu-progress-bar {
+  height: 100%;
+  border-radius: var(--csu-radius-control);
+  transition: width 0.3s ease;
+}
+
+.csu-progress-bar-processing {
+  background-color: var(--csu-status-processing);
+}
+
+.csu-progress-bar-complete {
+  background-color: var(--csu-status-complete);
+}
+
+.csu-progress-bar-review {
+  background-color: var(--csu-status-review);
+}
+
+.csu-progress-bar-failed {
+  background-color: var(--csu-status-failed);
+}
+
+.csu-progress-bar-queued {
+  background-color: var(--csu-status-queued);
+}
+
+/* Metric Meter Component (with 80% Review Gate Tick) */
+.csu-meter-container {
+  display: flex;
+  flex-direction: column;
+  gap: var(--csu-space-1);
+}
+
+.csu-meter-track {
+  width: 100%;
+  height: 8px;
+  background-color: var(--csu-surface-hover);
+  border-radius: var(--csu-radius-control);
+  position: relative;
+  overflow: visible;
+}
+
+.csu-meter-fill {
+  height: 100%;
+  border-radius: var(--csu-radius-control);
+  transition: width 0.25s ease;
+}
+
+.csu-meter-gate {
+  position: absolute;
+  left: 80%;
+  top: -3px;
+  bottom: -3px;
+  width: 2px;
+  background-color: var(--csu-accent-amber);
+  z-index: 2;
+  box-shadow: 0 0 6px rgba(255, 176, 0, 0.6);
+}
+
+.csu-meter-gate-label {
+  position: absolute;
+  left: 80%;
+  transform: translateX(-50%);
+  top: -18px;
+  font-family: var(--csu-font-mono);
+  font-size: 9px;
+  color: var(--csu-accent-amber);
+  font-weight: 600;
+  letter-spacing: 0.03em;
+}
+
+/* Control Slider Component */
+.csu-slider-group {
+  display: flex;
+  flex-direction: column;
+  gap: var(--csu-space-1);
+}
+
+.csu-slider-label-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  font-size: 12px;
+}
+
+.csu-slider-hint {
+  font-size: 11px;
+  color: #888888;
+  margin-top: 2px;
+}
+
+.csu-slider-input {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 100%;
+  height: 4px;
+  background: var(--csu-surface-hover);
+  border-radius: 2px;
+  outline: none;
+  margin: 8px 0;
+}
+
+.csu-slider-input::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 14px;
+  height: 14px;
+  border-radius: var(--csu-radius-control);
+  background: var(--csu-accent-amber);
+  cursor: pointer;
+  box-shadow: 0 0 6px rgba(255, 176, 0, 0.4);
+  transition: transform 0.1s ease, background-color 0.15s ease;
+}
+
+.csu-slider-input::-webkit-slider-thumb:hover {
+  transform: scale(1.15);
+  background: var(--csu-accent-amber-hover);
+}
+
+.csu-slider-input::-moz-range-thumb {
+  width: 14px;
+  height: 14px;
+  border-radius: var(--csu-radius-control);
+  background: var(--csu-accent-amber);
+  cursor: pointer;
+  border: none;
+}
+
+/* Toggle Row Component */
+.csu-toggle-row {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: var(--csu-space-4);
+  padding: var(--csu-space-3) 0;
+  border-bottom: 1px solid var(--csu-surface-border);
+}
+
+.csu-toggle-row:last-child {
+  border-bottom: none;
+}
+
+.csu-toggle-label {
+  font-size: 13px;
+  font-weight: 500;
+  color: #ededed;
+}
+
+.csu-toggle-consequence {
+  font-size: 11px;
+  color: #888888;
+  margin-top: 2px;
+  line-height: 1.4;
+}
+
+.csu-switch {
+  position: relative;
+  display: inline-block;
+  width: 36px;
+  height: 20px;
+  flex-shrink: 0;
+}
+
+.csu-switch input {
+  opacity: 0;
+  width: 0;
+  height: 0;
+}
+
+.csu-switch-slider {
+  position: absolute;
+  cursor: pointer;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background-color: var(--csu-surface-active);
+  transition: .2s;
+  border-radius: 10px;
+  border: 1px solid var(--csu-surface-border);
+}
+
+.csu-switch-slider:before {
+  position: absolute;
+  content: "";
+  height: 14px;
+  width: 14px;
+  left: 2px;
+  bottom: 2px;
+  background-color: #888888;
+  transition: .2s;
+  border-radius: 50%;
+}
+
+.csu-switch input:checked + .csu-switch-slider {
+  background-color: var(--csu-accent-amber);
+  border-color: var(--csu-accent-amber);
+}
+
+.csu-switch input:checked + .csu-switch-slider:before {
+  transform: translateX(16px);
+  background-color: #000000;
+}

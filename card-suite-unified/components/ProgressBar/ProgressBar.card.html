@@ -1,0 +1,57 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <link rel="stylesheet" href="../../styles.css">
+  <title>ProgressBar Specimen — Card Suite Unified</title>
+  <style>
+    body { background: #000000; padding: 24px; font-family: var(--csu-font-ui); color: #ededed; }
+    .item { margin-bottom: 20px; max-width: 480px; }
+    .label { display: flex; justify-content: space-between; font-size: 11px; font-family: var(--csu-font-mono); margin-bottom: 6px; }
+  </style>
+</head>
+<body>
+  <h2>ProgressBar Specimen</h2>
+  <p style="color: #888; font-size: 13px;">Per-card progress, tinted by workflow state.</p>
+
+  <div class="item">
+    <div class="label">
+      <span style="color: #00ffff;">PROCESSING (Canvas Resample)</span>
+      <span style="color: #ededed;">65%</span>
+    </div>
+    <div class="csu-progress-track">
+      <div class="csu-progress-bar csu-progress-bar-processing" style="width: 65%;"></div>
+    </div>
+  </div>
+
+  <div class="item">
+    <div class="label">
+      <span style="color: #ffffff;">COMPLETE</span>
+      <span style="color: #ededed;">100%</span>
+    </div>
+    <div class="csu-progress-track">
+      <div class="csu-progress-bar csu-progress-bar-complete" style="width: 100%;"></div>
+    </div>
+  </div>
+
+  <div class="item">
+    <div class="label">
+      <span style="color: #ffd700;">REVIEW NEEDED</span>
+      <span style="color: #ededed;">85%</span>
+    </div>
+    <div class="csu-progress-track">
+      <div class="csu-progress-bar csu-progress-bar-review" style="width: 85%;"></div>
+    </div>
+  </div>
+
+  <div class="item">
+    <div class="label">
+      <span style="color: #ff3333;">FAILED (Unsharp Stalled)</span>
+      <span style="color: #ededed;">40%</span>
+    </div>
+    <div class="csu-progress-track">
+      <div class="csu-progress-bar csu-progress-bar-failed" style="width: 40%;"></div>
+    </div>
+  </div>
+</body>
+</html>

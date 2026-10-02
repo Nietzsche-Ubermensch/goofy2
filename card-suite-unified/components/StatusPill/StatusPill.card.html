@@ -1,0 +1,80 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <link rel="stylesheet" href="../../styles.css">
+  <title>StatusPill Specimen — Card Suite Unified</title>
+  <style>
+    body { background: #000000; padding: 24px; font-family: var(--csu-font-ui); color: #ededed; }
+    .table { width: 100%; border-collapse: collapse; margin-top: 16px; font-size: 13px; }
+    .table th, .table td { text-align: left; padding: 12px; border-bottom: 1px solid #222; }
+    .table th { color: #888; font-family: var(--csu-font-mono); font-size: 11px; text-transform: uppercase; }
+  </style>
+</head>
+<body>
+  <h2>StatusPill Specimen</h2>
+  <p style="color: #888; font-size: 13px;">queued, processing (#00ffff), complete (#ffffff), review-needed (#ffd700), failed (#ff3333).</p>
+
+  <table class="table">
+    <thead>
+      <tr>
+        <th>State</th>
+        <th>Component Preview</th>
+        <th>Description</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td style="font-family: var(--csu-font-mono); color: #888;">queued</td>
+        <td>
+          <span class="csu-status-pill csu-status-pill-queued">
+            <span style="width: 6px; height: 6px; border-radius: 50%; background: #888; display: inline-block;"></span>
+            <span>QUEUED</span>
+          </span>
+        </td>
+        <td style="color: #888;">Card scan uploaded and waiting in batch worker queue.</td>
+      </tr>
+      <tr>
+        <td style="font-family: var(--csu-font-mono); color: #00ffff;">processing</td>
+        <td>
+          <span class="csu-status-pill csu-status-pill-processing">
+            <span style="width: 6px; height: 6px; border-radius: 50%; background: #00ffff; display: inline-block; box-shadow: 0 0 6px rgba(0,255,255,0.6);"></span>
+            <span>PROCESSING</span>
+          </span>
+        </td>
+        <td style="color: #888;">Canvas neural resample, unsharp, or denoise pipeline executing.</td>
+      </tr>
+      <tr>
+        <td style="font-family: var(--csu-font-mono); color: #ffffff;">complete</td>
+        <td>
+          <span class="csu-status-pill csu-status-pill-complete">
+            <span style="width: 6px; height: 6px; border-radius: 50%; background: #ffffff; display: inline-block;"></span>
+            <span>COMPLETE</span>
+          </span>
+        </td>
+        <td style="color: #888;">Card rectified and enhanced, ready for download or export.</td>
+      </tr>
+      <tr>
+        <td style="font-family: var(--csu-font-mono); color: #ffd700;">review-needed</td>
+        <td>
+          <span class="csu-status-pill csu-status-pill-review-needed">
+            <span style="width: 6px; height: 6px; border-radius: 50%; background: #ffd700; display: inline-block;"></span>
+            <span>REVIEW NEEDED</span>
+          </span>
+        </td>
+        <td style="color: #888;">OCR confidence &lt;80% review gate or blemish needs arbitration.</td>
+      </tr>
+      <tr>
+        <td style="font-family: var(--csu-font-mono); color: #ff3333;">failed</td>
+        <td>
+          <span class="csu-status-pill csu-status-pill-failed">
+            <span style="width: 6px; height: 6px; border-radius: 50%; background: #ff3333; display: inline-block;"></span>
+            <span>FAILED</span>
+          </span>
+        </td>
+        <td style="color: #888;">File corruption or processing error. Retry available in-row.</td>
+      </tr>
+    </tbody>
+  </table>
+</body>
+</html>

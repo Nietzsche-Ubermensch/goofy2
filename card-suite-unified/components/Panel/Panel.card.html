@@ -1,0 +1,42 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <link rel="stylesheet" href="../../styles.css">
+  <title>Panel Specimen — Card Suite Unified</title>
+  <style>
+    body { background: #000000; padding: 24px; font-family: var(--csu-font-ui); color: #ededed; }
+    .grid-demo { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; margin-top: 16px; }
+  </style>
+</head>
+<body>
+  <h2>Panel Component Specimen</h2>
+  <p style="color: #888; font-size: 13px;">The surface every dashboard region sits on; tone="accent" for regions needing an active decision.</p>
+
+  <div class="grid-demo">
+    <!-- Default Panel -->
+    <div class="csu-panel">
+      <div style="display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 12px;">
+        <div>
+          <h4 style="margin: 0; font-size: 13px; color: #ededed;">Queue Monitor</h4>
+          <span style="font-size: 11px; color: #888;">tone="default"</span>
+        </div>
+        <span class="csu-status-pill csu-status-pill-processing">4 in queue</span>
+      </div>
+      <p style="font-size: 12px; color: #aaa; margin: 0;">Standard dark workspace panel surface (#121212) with 8px radius and subtle 1px border (#222222).</p>
+    </div>
+
+    <!-- Accent Decision Panel -->
+    <div class="csu-panel-accent">
+      <div style="display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 12px;">
+        <div>
+          <h4 style="margin: 0; font-size: 13px; color: #ffb000;">Review Required (80% Gate)</h4>
+          <span style="font-size: 11px; color: #ffb000;">tone="accent"</span>
+        </div>
+        <span class="csu-status-pill csu-status-pill-review-needed">Decision Needed</span>
+      </div>
+      <p style="font-size: 12px; color: #eee; margin: 0;">Highlighted amber boundary (#ffb000) indicating OCR confidence is under threshold or requires operator arbitration.</p>
+    </div>
+  </div>
+</body>
+</html>

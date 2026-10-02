@@ -1,0 +1,58 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <link rel="stylesheet" href="../../styles.css">
+  <title>ControlSlider Specimen — Card Suite Unified</title>
+  <style>
+    body { background: #000000; padding: 24px; font-family: var(--csu-font-ui); color: #ededed; }
+    .box { background: #121212; border: 1px solid #222; border-radius: 8px; padding: 20px; max-width: 480px; }
+  </style>
+</head>
+<body>
+  <h2>ControlSlider Specimen</h2>
+  <p style="color: #888; font-size: 13px;">Scale, denoise, sharpen, contrast — each paired with a plain-language hint.</p>
+
+  <div class="box">
+    <!-- Scale Slider -->
+    <div class="csu-slider-group" style="margin-bottom: 20px;">
+      <div class="csu-slider-label-row">
+        <label style="font-weight: 500; color: #ededed;">Upscale Resolution</label>
+        <span class="csu-metric-value" style="color: #ffb000; font-weight: 600; font-size: 12px;">2.0x</span>
+      </div>
+      <input type="range" min="1" max="4" step="0.5" value="2" class="csu-slider-input">
+      <p class="csu-slider-hint" style="margin: 0;">Multiplier factor for output dimensions (doubles physical pixel dimensions).</p>
+    </div>
+
+    <!-- Denoise Slider -->
+    <div class="csu-slider-group" style="margin-bottom: 20px;">
+      <div class="csu-slider-label-row">
+        <label style="font-weight: 500; color: #ededed;">Surface Denoise</label>
+        <span class="csu-metric-value" style="color: #ffb000; font-weight: 600; font-size: 12px;">35%</span>
+      </div>
+      <input type="range" min="0" max="100" step="1" value="35" class="csu-slider-input">
+      <p class="csu-slider-hint" style="margin: 0;">Smooths scanner CCD grain and dust without dissolving typography.</p>
+    </div>
+
+    <!-- Sharpen Slider -->
+    <div class="csu-slider-group" style="margin-bottom: 20px;">
+      <div class="csu-slider-label-row">
+        <label style="font-weight: 500; color: #ededed;">Micro-Sharpening</label>
+        <span class="csu-metric-value" style="color: #ffb000; font-weight: 600; font-size: 12px;">60%</span>
+      </div>
+      <input type="range" min="0" max="100" step="1" value="60" class="csu-slider-input">
+      <p class="csu-slider-hint" style="margin: 0;">Boosts localized edge contrast along micro-stamped letters and foil contours.</p>
+    </div>
+
+    <!-- Contrast Slider -->
+    <div class="csu-slider-group">
+      <div class="csu-slider-label-row">
+        <label style="font-weight: 500; color: #ededed;">Dynamic Contrast</label>
+        <span class="csu-metric-value" style="color: #ffb000; font-weight: 600; font-size: 12px;">15%</span>
+      </div>
+      <input type="range" min="0" max="50" step="1" value="15" class="csu-slider-input">
+      <p class="csu-slider-hint" style="margin: 0;">Expands dynamic range between deep card blacks and specular reflections.</p>
+    </div>
+  </div>
+</body>
+</html>

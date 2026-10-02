@@ -1,0 +1,51 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <link rel="stylesheet" href="../../styles.css">
+  <title>ToggleRow Specimen — Card Suite Unified</title>
+  <style>
+    body { background: #000000; padding: 24px; font-family: var(--csu-font-ui); color: #ededed; }
+    .box { background: #121212; border: 1px solid #222; border-radius: 8px; padding: 20px; max-width: 520px; }
+  </style>
+</head>
+<body>
+  <h2>ToggleRow Specimen</h2>
+  <p style="color: #888; font-size: 13px;">Switch rows that state their consequence (conservative processing).</p>
+
+  <div class="box">
+    <div class="csu-toggle-row">
+      <div style="flex: 1; padding-right: 16px;">
+        <label class="csu-toggle-label">Conservative Edge Margin</label>
+        <p class="csu-toggle-consequence">Inscribes quad 1.5% inward to guarantee zero dark scanner bed border bleed.</p>
+      </div>
+      <label class="csu-switch">
+        <input type="checkbox" checked>
+        <span class="csu-switch-slider"></span>
+      </label>
+    </div>
+
+    <div class="csu-toggle-row">
+      <div style="flex: 1; padding-right: 16px;">
+        <label class="csu-toggle-label">Raw Surface Dust & Scratch Inpainting</label>
+        <p class="csu-toggle-consequence">Navier-Stokes diffusion over identified micro-scuffs on raw card surfaces.</p>
+      </div>
+      <label class="csu-switch">
+        <input type="checkbox" checked>
+        <span class="csu-switch-slider"></span>
+      </label>
+    </div>
+
+    <div class="csu-toggle-row">
+      <div style="flex: 1; padding-right: 16px;">
+        <label class="csu-toggle-label">Holographic Color Boosting</label>
+        <p class="csu-toggle-consequence">Selectively elevates saturation in refractor prism regions without saturating skin tones.</p>
+      </div>
+      <label class="csu-switch">
+        <input type="checkbox">
+        <span class="csu-switch-slider"></span>
+      </label>
+    </div>
+  </div>
+</body>
+</html>

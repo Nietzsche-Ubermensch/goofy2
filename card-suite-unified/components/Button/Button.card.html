@@ -1,0 +1,45 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <link rel="stylesheet" href="../../styles.css">
+  <title>Button Specimen — Card Suite Unified</title>
+  <style>
+    body { background: #000000; padding: 24px; font-family: var(--csu-font-ui); color: #ededed; }
+    .row { display: flex; align-items: center; gap: 12px; margin-bottom: 16px; flex-wrap: wrap; }
+    .label { width: 120px; font-size: 12px; color: #888; font-family: var(--csu-font-mono); }
+  </style>
+</head>
+<body>
+  <h2>Button Component Specimen</h2>
+  <p style="color: #888; font-size: 13px;">Variants: primary / secondary / ghost / danger, across md (36px) and sm (28px).</p>
+
+  <h4 style="color: #ededed; margin-top: 24px;">Medium (36px default)</h4>
+  <div class="row">
+    <span class="label">primary</span>
+    <button class="csu-btn csu-btn-primary csu-btn-md">Start Enhancement</button>
+    <button class="csu-btn csu-btn-primary csu-btn-md" disabled>Processing...</button>
+  </div>
+  <div class="row">
+    <span class="label">secondary</span>
+    <button class="csu-btn csu-btn-secondary csu-btn-md">Export Audit JSON</button>
+  </div>
+  <div class="row">
+    <span class="label">ghost</span>
+    <button class="csu-btn csu-btn-ghost csu-btn-md">Reset Coordinates</button>
+  </div>
+  <div class="row">
+    <span class="label">danger</span>
+    <button class="csu-btn csu-btn-danger csu-btn-md">Cancel All Jobs</button>
+  </div>
+
+  <h4 style="color: #ededed; margin-top: 24px;">Small (28px in-row actions)</h4>
+  <div class="row">
+    <span class="label">in-row actions</span>
+    <button class="csu-btn csu-btn-primary csu-btn-sm">Download</button>
+    <button class="csu-btn csu-btn-secondary csu-btn-sm">Retry</button>
+    <button class="csu-btn csu-btn-ghost csu-btn-sm">Inspect</button>
+    <button class="csu-btn csu-btn-danger csu-btn-sm">Remove</button>
+  </div>
+</body>
+</html>

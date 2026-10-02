@@ -1,0 +1,333 @@
+import React, { useState } from 'react';
+import { Tag, X, Check, Sparkles, Folder, FileText } from 'lucide-react';
+import { CardMetadataTags } from '../types';
+
+interface BatchMetadataModalProps {
+  isOpen: boolean;
+  totalCards: number;
+  onClose: () => void;
+  onApply: (metadata: CardMetadataTags, renameFiles: boolean) => void;
+}
+
+export const BatchMetadataModal: React.FC<BatchMetadataModalProps> = ({
+  isOpen,
+  totalCards,
+  onClose,
+  onApply,
+}) => {
+  const [cardSeries, setCardSeries] = useState('');
+  const [year, setYear] = useState('');
+  const [setName, setSetName] = useState('');
+  const [player, setPlayer] = useState('');
+  const [gradeTarget, setGradeTarget] = useState('Raw Gem Mint (Pack Fresh)');
+  const [notes, setNotes] = useState('');
+  const [sport, setSport] = useState('Wrestling');
+  const [manufacturer, setManufacturer] = useState('');
+  const [printRun, setPrintRun] = useState('');
+  const [autographed, setAutographed] = useState<'Yes' | 'No' | ''>('');
+  const [price, setPrice] = useState('19.99');
+  const [renameFiles, setRenameFiles] = useState(true);
+
+  if (!isOpen) return null;
+
+  const handleApply = (e: React.FormEvent) => {
+    e.preventDefault();
+    onApply(
+      {
+        cardSeries: cardSeries.trim() || undefined,
+        year: year.trim() || undefined,
+        setName: setName.trim() || undefined,
+        player: player.trim() || undefined,
+        gradeTarget: gradeTarget || undefined,
+        notes: notes.trim() || undefined,
+        sport: sport.trim() || undefined,
+        manufacturer: manufacturer.trim() || undefined,
+        printRun: printRun.trim() || undefined,
+        autographed: autographed ? (autographed as 'Yes' | 'No') : undefined,
+        price: price.trim() || undefined,
+      },
+      renameFiles
+    );
+    onClose();
+  };
+
+  const applyPreset = (presetSeries: string, presetYear: string, presetSet?: string, presetMfg?: string, presetSport?: string) => {
+    setCardSeries(presetSeries);
+    setYear(presetYear);
+    if (presetSet) setSetName(presetSet);
+    if (presetMfg) setManufacturer(presetMfg);
+    if (presetSport) setSport(presetSport);
+  };
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm animate-in fade-in duration-200">
+      <div 
+        className="w-full max-w-xl max-h-[90vh] overflow-y-auto bg-[#0c121e] border border-cyan-500/40 rounded-2xl p-6 shadow-2xl shadow-cyan-950/50 space-y-5 text-slate-100 font-sans"
+        onClick={(e) => e.stopPropagation()}
+      >
+        {/* Modal Header */}
+        <div className="flex items-center justify-between pb-3 border-b border-cyan-500/20">
+          <div className="flex items-center gap-2.5">
+            <div className="w-8 h-8 rounded-lg bg-cyan-500/10 border border-cyan-400/40 flex items-center justify-center text-cyan-300">
+              <Tag size={18} />
+            </div>
+            <div>
+              <h3 className="text-sm font-bold font-mono text-cyan-300 uppercase tracking-wider">
+                Batch Metadata Editor & CSV Tagging
+              </h3>
+              <p className="text-[11px] font-mono text-slate-400">
+                Bulk assign series, year, sport, and grading tags across {totalCards} cards in queue
+              </p>
+            </div>
+          </div>
+          <button
+            onClick={onClose}
+            className="p-1.5 rounded-lg text-slate-400 hover:text-slate-200 hover:bg-slate-800 transition-colors"
+          >
+            <X size={18} />
+          </button>
+        </div>
+
+        {/* Quick Presets */}
+        <div className="space-y-1.5">
+          <label className="text-[11px] font-mono font-semibold text-slate-400 uppercase tracking-wider block">
+            Popular Series Quick Presets
+          </label>
+          <div className="flex flex-wrap gap-1.5">
+            {[
+              { series: 'AEW Black Diamond', year: '2024', set: 'Event Logo Patches', mfg: 'Upper Deck', sport: 'Wrestling' },
+              { series: 'Panini Prizm WWE', year: '2024', set: 'Silver Prizm', mfg: 'Panini', sport: 'Wrestling' },
+              { series: 'Topps Chrome WWE', year: '2024', set: 'Base Refractor', mfg: 'Topps', sport: 'Wrestling' },
+              { series: 'AEW Black Diamond', year: '2024', set: 'Squared Circle Gems', mfg: 'Upper Deck', sport: 'Wrestling' },
+              { series: 'Topps WCW Nitro', year: '1999', set: 'Main Event Chromium', mfg: 'Topps', sport: 'Wrestling' },
+              { series: 'Topps WWF Series 1', year: '1985', set: 'Base Classic Wax', mfg: 'Topps', sport: 'Wrestling' },
+            ].map((p, idx) => (
+              <button
+                key={idx}
+                type="button"
+                onClick={() => applyPreset(p.series, p.year, p.set, p.mfg, p.sport)}
+                className="px-2.5 py-1 rounded-md bg-slate-900/80 hover:bg-cyan-950/50 border border-slate-700 hover:border-cyan-500/50 text-[11px] font-mono text-slate-300 hover:text-cyan-300 transition-all flex items-center gap-1"
+              >
+                <Sparkles size={10} className="text-cyan-400" />
+                <span>{p.mfg ? `${p.mfg} ` : ''}{p.series} ({p.year}) [{p.set}]</span>
+              </button>
+            ))}
+          </div>
+        </div>
+
+        {/* Form Inputs */}
+        <form onSubmit={handleApply} className="space-y-3.5 text-xs">
+          <div className="grid grid-cols-2 gap-3">
+            <div className="space-y-1">
+              <label className="font-mono text-slate-300 font-semibold block">
+                Card Series / Brand
+              </label>
+              <input
+                id="batch-meta-series"
+                type="text"
+                placeholder="e.g., AEW Black Diamond, Topps Chrome"
+                value={cardSeries}
+                onChange={(e) => setCardSeries(e.target.value)}
+                className="w-full px-3.5 py-2.5 rounded-lg bg-[#070b12] border border-cyan-500/30 text-slate-100 placeholder:text-slate-600 focus:outline-none focus:border-cyan-400 font-mono text-xs"
+              />
+            </div>
+
+            <div className="space-y-1">
+              <label className="font-mono text-slate-300 font-semibold block">
+                Manufacturer
+              </label>
+              <input
+                id="batch-meta-mfg"
+                type="text"
+                placeholder="e.g., Upper Deck, Topps, Panini, Leaf"
+                value={manufacturer}
+                onChange={(e) => setManufacturer(e.target.value)}
+                className="w-full px-3.5 py-2.5 rounded-lg bg-[#070b12] border border-cyan-500/30 text-slate-100 placeholder:text-slate-600 focus:outline-none focus:border-cyan-400 font-mono text-xs"
+              />
+            </div>
+          </div>
+
+          <div className="grid grid-cols-3 gap-3">
+            <div className="space-y-1">
+              <label className="font-mono text-slate-300 font-semibold block">
+                Set / Parallel / Insert
+              </label>
+              <input
+                id="batch-meta-set"
+                type="text"
+                placeholder="e.g., Event Logo Patches, Gems"
+                value={setName}
+                onChange={(e) => setSetName(e.target.value)}
+                className="w-full px-3.5 py-2.5 rounded-lg bg-[#070b12] border border-cyan-500/30 text-slate-100 placeholder:text-slate-600 focus:outline-none focus:border-cyan-400 font-mono text-xs"
+              />
+            </div>
+
+            <div className="space-y-1">
+              <label className="font-mono text-slate-300 font-semibold block">
+                Release Year
+              </label>
+              <input
+                id="batch-meta-year"
+                type="text"
+                placeholder="e.g., 2024, 2023-24"
+                value={year}
+                onChange={(e) => setYear(e.target.value)}
+                className="w-full px-3.5 py-2.5 rounded-lg bg-[#070b12] border border-cyan-500/30 text-slate-100 placeholder:text-slate-600 focus:outline-none focus:border-cyan-400 font-mono text-xs"
+              />
+            </div>
+
+            <div className="space-y-1">
+              <label className="font-mono text-slate-300 font-semibold block">
+                Sport / Category
+              </label>
+              <input
+                id="batch-meta-sport"
+                type="text"
+                placeholder="e.g., Wrestling (WWE, AEW, WCW)"
+                value={sport}
+                onChange={(e) => setSport(e.target.value)}
+                className="w-full px-3.5 py-2.5 rounded-lg bg-[#070b12] border border-cyan-500/30 text-slate-100 placeholder:text-slate-600 focus:outline-none focus:border-cyan-400 font-mono text-xs"
+              />
+            </div>
+          </div>
+
+          <div className="grid grid-cols-3 gap-3">
+            <div className="space-y-1">
+              <label className="font-mono text-slate-300 font-semibold block">
+                Player / Subject
+              </label>
+              <input
+                id="batch-meta-player"
+                type="text"
+                placeholder="e.g., Hikaru Shida, Julia Hart"
+                value={player}
+                onChange={(e) => setPlayer(e.target.value)}
+                className="w-full px-3.5 py-2.5 rounded-lg bg-[#070b12] border border-cyan-500/30 text-slate-100 placeholder:text-slate-600 focus:outline-none focus:border-cyan-400 font-mono text-xs"
+              />
+            </div>
+
+            <div className="space-y-1">
+              <label className="font-mono text-slate-300 font-semibold block">
+                Print Run / Serial #
+              </label>
+              <input
+                id="batch-meta-printrun"
+                type="text"
+                placeholder="e.g., 36/99, 99, 1/1"
+                value={printRun}
+                onChange={(e) => setPrintRun(e.target.value)}
+                className="w-full px-3.5 py-2.5 rounded-lg bg-[#070b12] border border-cyan-500/30 text-slate-100 placeholder:text-slate-600 focus:outline-none focus:border-cyan-400 font-mono text-xs"
+              />
+            </div>
+
+            <div className="space-y-1">
+              <label className="font-mono text-slate-300 font-semibold block">
+                Autographed?
+              </label>
+              <select
+                id="batch-meta-auto"
+                value={autographed}
+                onChange={(e) => setAutographed(e.target.value as any)}
+                className="w-full px-3.5 py-2.5 rounded-lg bg-[#070b12] border border-cyan-500/30 text-slate-100 focus:outline-none focus:border-cyan-400 font-mono text-xs cursor-pointer"
+              >
+                <option value="">Auto-Detect from File</option>
+                <option value="Yes">Yes (Autographed)</option>
+                <option value="No">No</option>
+              </select>
+            </div>
+          </div>
+
+          <div className="grid grid-cols-2 gap-3">
+            <div className="space-y-1">
+              <label className="font-mono text-slate-300 font-semibold block">
+                Target Grading Standard
+              </label>
+              <select
+                id="batch-meta-grade"
+                value={gradeTarget}
+                onChange={(e) => setGradeTarget(e.target.value)}
+                className="w-full px-3.5 py-2.5 rounded-lg bg-[#070b12] border border-cyan-500/30 text-slate-100 focus:outline-none focus:border-cyan-400 font-mono text-xs cursor-pointer"
+              >
+                <option value="Raw Gem Mint (Pack Fresh)">Raw Gem Mint (Pack Fresh)</option>
+                <option value="Raw Mint (Uncirculated)">Raw Mint (Uncirculated)</option>
+                <option value="Raw Near Mint-Mint (NM-MT 8+)">Raw Near Mint-Mint (NM-MT 8+)</option>
+                <option value="Raw Near Mint (NM 7)">Raw Near Mint (NM 7)</option>
+                <option value="Raw Excellent-Mint (EX-MT 6)">Raw Excellent-Mint (EX-MT 6)</option>
+                <option value="Raw Excellent (EX 5)">Raw Excellent (EX 5)</option>
+                <option value="Raw Very Good (VG 3-4)">Raw Very Good (VG 3-4)</option>
+                <option value="Raw Vintage Authentic">Raw Vintage Authentic</option>
+              </select>
+            </div>
+
+            <div className="space-y-1">
+              <label className="font-mono text-slate-300 font-semibold block">
+                Marketplace Price ($)
+              </label>
+              <input
+                id="batch-meta-price"
+                type="number"
+                step="0.01"
+                placeholder="19.99"
+                value={price}
+                onChange={(e) => setPrice(e.target.value)}
+                className="w-full px-3.5 py-2.5 rounded-lg bg-[#070b12] border border-cyan-500/30 text-slate-100 placeholder:text-slate-600 focus:outline-none focus:border-cyan-400 font-mono text-xs"
+              />
+            </div>
+          </div>
+
+          <div className="space-y-1">
+            <label className="font-mono text-slate-300 font-semibold block">
+              Batch Notes / Custom Tags
+            </label>
+            <input
+              id="batch-meta-notes"
+              type="text"
+              placeholder="e.g., Box Break Case #4, Lot #12"
+              value={notes}
+              onChange={(e) => setNotes(e.target.value)}
+              className="w-full px-3.5 py-2.5 rounded-lg bg-[#070b12] border border-cyan-500/30 text-slate-100 placeholder:text-slate-600 focus:outline-none focus:border-cyan-400 font-mono text-xs"
+            />
+          </div>
+
+          {/* Rename File Checkbox */}
+          <label className="flex items-center gap-2.5 p-3 rounded-lg bg-cyan-950/20 border border-cyan-500/20 cursor-pointer select-none">
+            <input
+              id="batch-meta-rename-checkbox"
+              type="checkbox"
+              checked={renameFiles}
+              onChange={(e) => setRenameFiles(e.target.checked)}
+              className="w-4 h-4 rounded accent-cyan-400"
+            />
+            <div className="text-xs">
+              <span className="font-mono font-semibold text-cyan-200 block">
+                Format export file names with tags
+              </span>
+              <span className="text-[10px] text-slate-400 font-mono">
+                Matches cropped asset file naming in CSV: <code>[Year]_[Series]_[Set]_[Player]_enhanced_[OriginalName].png</code>
+              </span>
+            </div>
+          </label>
+
+          {/* Modal Actions */}
+          <div className="flex items-center justify-end gap-2.5 pt-3 border-t border-cyan-500/20">
+            <button
+              type="button"
+              onClick={onClose}
+              className="px-4 py-2 rounded-lg text-slate-400 hover:text-slate-200 text-xs font-mono font-semibold transition-colors"
+            >
+              Cancel
+            </button>
+            <button
+              id="btn-confirm-apply-batch-metadata"
+              type="submit"
+              className="px-5 py-2 rounded-lg bg-cyan-400 hover:bg-cyan-300 text-slate-950 font-mono font-bold text-xs flex items-center gap-1.5 transition-all shadow-[0_0_15px_rgba(0,243,255,0.4)]"
+            >
+              <Check size={14} strokeWidth={3} />
+              <span>Apply to All Cards</span>
+            </button>
+          </div>
+        </form>
+      </div>
+    </div>
+  );
+};

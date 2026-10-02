@@ -1,0 +1,2209 @@
+import React, { useState, useRef, useEffect, useCallback } from 'react';
+import { useDropzone } from 'react-dropzone';
+import { 
+  Upload, 
+  X, 
+  Loader2, 
+  Download, 
+  Settings2, 
+  Play, 
+  Trash2, 
+  Sliders, 
+  Crop, 
+  Wand2, 
+  Info, 
+  CheckCircle2,
+  FileSpreadsheet,
+  Layers,
+  Sparkles,
+  Zap,
+  Eye,
+  ShieldCheck,
+  Check,
+  RefreshCw,
+  FolderInput,
+  FileDown,
+  Maximize2,
+  Tag,
+  PackageCheck,
+  Award,
+  ArrowRightLeft,
+  Columns2,
+  AlertTriangle
+} from 'lucide-react';
+import { CardImage, ProcessingStatus, ProcessingSettings, AIProvider, EnhancementSettings, CropQuad, CardMetadataTags } from '../types';
+import { analyzeCardDamage, restoreCard } from '../services/aiService';
+import { detectCardEdges, autoCenterQuad, calculateCardCentering } from '../utils/edgeDetection';
+import { processCardComplete } from '../utils/imageEnhancer';
+import { scanDroppedItems, unpackZipFile } from '../utils/dropzoneScanner';
+import { BatchItemEditorModal } from '../components/BatchItemEditorModal';
+import { BatchMetadataModal } from '../components/BatchMetadataModal';
+import { BatchBulkActionPanel } from '../components/BatchBulkActionPanel';
+import { BatchProcessingProgressBar } from '../components/BatchProcessingProgressBar';
+import { BatchRecoveryBanner } from '../components/BatchRecoveryBanner';
+import { BatchCompareLightboxModal } from '../components/BatchCompareLightboxModal';
+import { BatchCompareBar } from '../components/BatchCompareBar';
+import { BatchMetadataCsvModal } from '../components/BatchMetadataCsvModal';
+import { getPresetCards, getTestedUserCards } from '../data/presetCards';
+import { getEnhancedFileName, generateCatalogCsv, generateEbayExchangeCsv } from '../utils/csvExport';
+import SettingsModal from '../components/SettingsModal';
+import { 
+  saveBatchSession, 
+  getStoredBatchSession, 
+  updateCardRecordInSession, 
+  clearBatchSession 
+} from '../utils/batchSessionStorage';
+import JSZip from 'jszip';
+
+export interface BatchCropperProps {
+  initialFiles?: File[];
+  folderName?: string;
+  onClearInitialFiles?: () => void;
+}
+
+export interface SportsCardPreset {
+  id: string;
+  name: string;
+  badge: string;
+  desc: string;
+  settings: Partial<ProcessingSettings>;
+}
+
+export const SPORTS_CARD_PRESETS: SportsCardPreset[] = [
+  {
+    id: 'prizm_chrome',
+    name: 'WWE Prizm & Topps Chrome Refractor',
+    badge: '🤼 CHROME REFRACTOR',
+    desc: 'Ultra-glossy championship belts, vibrant ring attire & refractor luster for WWE/AEW raw chrome',
+    settings: {
+      contrast: 1.28,
+      brightness: 0.04,
+      saturation: 1.22,
+      vibrance: 0.35,
+      sharpen: 1.10,
+      descratchThreshold: 0.12,
+      descratchRadius: 2.5,
+      microDustFilter: true,
+      antiGlare: true,
+      chromeParallelClarity: true,
+      enableDescratching: true
+    }
+  },
+  {
+    id: 'vintage_wax',
+    name: '1985 Classic WWF / WCW Wax Pack',
+    badge: '👑 VINTAGE RAW',
+    desc: 'Calibrated for 1985 Topps WWF, WCW Impel, and classic cardboard raw stock with warm tones',
+    settings: {
+      contrast: 1.18,
+      brightness: 0.02,
+      saturation: 1.05,
+      vibrance: 0.12,
+      sharpen: 0.75,
+      descratchThreshold: 0.16,
+      descratchRadius: 2.0,
+      microDustFilter: true,
+      antiGlare: false,
+      chromeParallelClarity: false,
+      enableDescratching: true
+    }
+  },
+  {
+    id: 'autograph_serial',
+    name: 'Wrestling On-Card Auto & Relic Patch',
+    badge: '✍️ WRESTLER AUTO',
+    desc: 'Maximum edge micro-contrast for sharp wrestler ink signatures, ring canvas & mat relics',
+    settings: {
+      contrast: 1.32,
+      brightness: 0.02,
+      saturation: 1.10,
+      vibrance: 0.15,
+      sharpen: 1.45,
+      descratchThreshold: 0.14,
+      descratchRadius: 2.0,
+      microDustFilter: true,
+      antiGlare: true,
+      chromeParallelClarity: true,
+      enableDescratching: false
+    }
+  },
+  {
+    id: 'raw_penny_sleeve',
+    name: 'Raw Card Penny Sleeve & Surface Clean',
+    badge: '✨ RAW SURFACE',
+    desc: 'Removes scanner bed dust, sleeve lines, and micro-particles while preserving raw card edges',
+    settings: {
+      contrast: 1.20,
+      brightness: 0.05,
+      saturation: 1.15,
+      vibrance: 0.25,
+      sharpen: 0.90,
+      descratchThreshold: 0.10,
+      descratchRadius: 3.0,
+      microDustFilter: true,
+      antiGlare: true,
+      chromeParallelClarity: true,
+      enableDescratching: true
+    }
+  },
+  {
+    id: 'studio_raw',
+    name: 'Raw Card 50/50 Centering & Studio Scan',
+    badge: '🎯 RAW 50/50',
+    desc: 'Crisp balanced contrast, clean raw cardboard white borders, calibrated for eBay card listings',
+    settings: {
+      contrast: 1.16,
+      brightness: 0.03,
+      saturation: 1.12,
+      vibrance: 0.20,
+      sharpen: 0.85,
+      descratchThreshold: 0.14,
+      descratchRadius: 2.0,
+      microDustFilter: true,
+      antiGlare: true,
+      chromeParallelClarity: true,
+      enableDescratching: true
+    }
+  }
+];
+
+const BatchCropper: React.FC<BatchCropperProps> = ({ initialFiles, folderName, onClearInitialFiles }) => {
+  const [cards, setCards] = useState<CardImage[]>([]);
+  const [isProcessing, setIsProcessing] = useState(false);
+  const [isDownloading, setIsDownloading] = useState(false);
+  const [isBatchRendering, setIsBatchRendering] = useState(false);
+  const [isPaused, setIsPaused] = useState(false);
+  const [batchRenderProgress, setBatchRenderProgress] = useState<{ completed: number; total: number }>({ completed: 0, total: 0 });
+  const [throughputCardsPerSec, setThroughputCardsPerSec] = useState<number>(0);
+  const [avgMsPerCard, setAvgMsPerCard] = useState<number>(0);
+  const [estimatedSecondsRemaining, setEstimatedSecondsRemaining] = useState<number | null>(null);
+  const [elapsedSeconds, setElapsedSeconds] = useState<number>(0);
+  const [activeProcessingCardName, setActiveProcessingCardName] = useState<string | null>(null);
+  const [savedSession, setSavedSession] = useState<{ cards: CardImage[]; settings?: ProcessingSettings; savedAt: number } | null>(null);
+
+  const isPausedRef = useRef<boolean>(false);
+  const isCancelledRef = useRef<boolean>(false);
+  const [logs, setLogs] = useState<string[]>([]);
+  const [selectedCardForView, setSelectedCardForView] = useState<CardImage | null>(null);
+  const [editingCard, setEditingCard] = useState<CardImage | null>(null);
+  const [previewMode, setPreviewMode] = useState<'enhanced' | 'original' | 'compare'>('enhanced');
+  const [compareSliderPos, setCompareSliderPos] = useState<number>(50);
+  const [compareFormat, setCompareFormat] = useState<'split' | 'side-by-side'>('split');
+  const [isCompareLightboxOpen, setIsCompareLightboxOpen] = useState<boolean>(false);
+  const [compareActiveCardId, setCompareActiveCardId] = useState<string | null>(null);
+  const [isMetadataModalOpen, setIsMetadataModalOpen] = useState(false);
+  const [isCsvModalOpen, setIsCsvModalOpen] = useState(false);
+  const [isSettingsModalOpen, setIsSettingsModalOpen] = useState(false);
+  const [activePresetId, setActivePresetId] = useState<string>('prizm_chrome');
+  const [scanQueueProgress, setScanQueueProgress] = useState<{ processed: number; total: number } | null>(null);
+  const [isBulkCropping, setIsBulkCropping] = useState<boolean>(false);
+  const [bulkCropProgress, setBulkCropProgress] = useState<{ processed: number; total: number; currentCardName?: string } | null>(null);
+
+  // User feedback toast upon Bulk Enhancement completion or alerts
+  interface EnhancementToast {
+    type: 'success' | 'warning' | 'error';
+    title: string;
+    message: string;
+    count: number;
+    timestamp: string;
+    settingsSummary: string;
+    failedCount?: number;
+  }
+  const [enhancementToast, setEnhancementToast] = useState<EnhancementToast | null>(null);
+
+  // Auto-dismiss enhancement feedback toast after 6 seconds
+  useEffect(() => {
+    if (!enhancementToast) return;
+    const timer = setTimeout(() => {
+      setEnhancementToast(null);
+    }, 6000);
+    return () => clearTimeout(timer);
+  }, [enhancementToast]);
+
+  // Global Keyboard Shortcuts for Compare Mode and Queue Navigation
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement) {
+        return;
+      }
+      if (isCompareLightboxOpen || editingCard || isMetadataModalOpen || isCsvModalOpen || isSettingsModalOpen) {
+        return;
+      }
+
+      if ((e.key === 'c' || e.key === 'C') && cards.length > 0) {
+        e.preventDefault();
+        setPreviewMode(prev => prev === 'compare' ? 'enhanced' : 'compare');
+      } else if ((e.key === 'l' || e.key === 'L') && cards.length > 0) {
+        e.preventDefault();
+        setCompareActiveCardId(cards[0]?.id || null);
+        setIsCompareLightboxOpen(true);
+      }
+    };
+
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [cards, isCompareLightboxOpen, editingCard, isMetadataModalOpen, isCsvModalOpen, isSettingsModalOpen]);
+
+  // Fast sample cards generator to test Compare Mode immediately
+  const handleLoadSampleCards = async () => {
+    addLog('Loading calibrated sample trading cards for instant comparison testing...');
+    try {
+      const presets = getPresetCards();
+      const sampleCards: CardImage[] = [];
+
+      for (const preset of presets) {
+        const res = await fetch(preset.originalUrl);
+        const blob = await res.blob();
+        const file = new File(
+          [blob],
+          `${preset.name.replace(/[^a-zA-Z0-9_-]/g, '_')}.png`,
+          { type: 'image/png' }
+        );
+        const previewUrl = URL.createObjectURL(file);
+        const id = Math.random().toString(36).substring(2, 11);
+
+        const isWWE = preset.name.includes('WWE') || preset.name.includes('WWF');
+        const isAEW = preset.name.includes('AEW');
+        const isWCW = preset.name.includes('WCW');
+        const isVintage = preset.name.includes('1985');
+        const isNitro = preset.name.includes('1999');
+
+        sampleCards.push({
+          id,
+          file,
+          previewUrl,
+          status: ProcessingStatus.Pending,
+          originalWidth: preset.width || 800,
+          originalHeight: preset.height || 1120,
+          quad: preset.quad,
+          metadata: {
+            sport: 'Wrestling',
+            league: isWWE ? 'WWE' : isWCW ? 'WCW' : 'AEW',
+            manufacturer: isAEW ? 'Upper Deck' : isVintage || isNitro ? 'Topps' : 'Panini',
+            cardSeries: isWWE && !isVintage ? 'Panini Prizm WWE' : isVintage ? 'Topps WWF Series 1' : isNitro ? 'Topps WCW Nitro' : 'Upper Deck AEW Black Diamond',
+            year: isVintage ? '1985' : isNitro ? '1999' : '2024',
+            setName: isVintage ? 'Base Raw Vintage' : isNitro ? 'Main Event Chromium' : isWWE ? 'Silver Prizm' : 'Dual Relic & Auto',
+            player: isVintage ? 'Hulk Hogan' : isNitro ? 'Sting' : isWWE ? 'Roman Reigns' : 'Kenny Omega',
+            condition: 'Near mint or better',
+            gradeTarget: isVintage ? 'Raw Near Mint-Mint (NM-MT 8+)' : 'Raw Gem Mint (Pack Fresh)',
+            notes: 'Raw unencapsulated card, true 2.5x3.5 aspect ratio'
+          }
+        });
+      }
+
+      setCards(prev => [...prev, ...sampleCards]);
+      setPreviewMode('compare');
+      addLog(`✓ Successfully loaded ${sampleCards.length} raw wrestling sample cards (WWE Prizm, AEW Diamond, 1985 Topps WWF, WCW Nitro). Switched to Compare Mode!`);
+    } catch (err) {
+      console.error('Failed to load sample cards:', err);
+      addLog('Could not load sample cards. Please drop or select image files directly.');
+    }
+  };
+
+  // Dedicated loader for verified test cards (AEW Black Diamond Hikaru Shida 0960 & Julia Hart 0968)
+  const handleLoadTestedCards = async () => {
+    addLog('Loading 8 verified AEW Black Diamond test card scans (0960, 0968, 1018-1032)...');
+    try {
+      const testedItems = getTestedUserCards();
+      const loaded: CardImage[] = [];
+
+      for (const item of testedItems) {
+        const res = await fetch(item.originalUrl);
+        const blob = await res.blob();
+        const file = new File([blob], item.fileName, { type: 'image/png' });
+        const previewUrl = URL.createObjectURL(file);
+
+        loaded.push({
+          id: item.id,
+          file,
+          previewUrl,
+          status: ProcessingStatus.Pending,
+          originalWidth: item.width,
+          originalHeight: item.height,
+          quad: item.quad,
+          metadata: item.metadata
+        });
+      }
+
+      setCards(prev => [...prev, ...loaded]);
+      setPreviewMode('compare');
+      addLog(`✓ Successfully loaded all ${loaded.length} verified AEW Black Diamond test cards into queue with Compare Mode active!`);
+    } catch (err: any) {
+      console.error('Failed to load tested cards:', err);
+      addLog(`Could not load tested cards: ${err?.message || err}`);
+    }
+  };
+  
+  const handleApplyBulkMetadata = (metadata: CardMetadataTags, renameFiles: boolean) => {
+    setCards(prev => prev.map(card => ({
+      ...card,
+      metadata: {
+        ...card.metadata,
+        ...metadata,
+      }
+    })));
+
+    const tagSummary = [
+      metadata.cardSeries ? `Series: "${metadata.cardSeries}"` : null,
+      metadata.year ? `Year: "${metadata.year}"` : null,
+      metadata.setName ? `Set: "${metadata.setName}"` : null,
+      metadata.player ? `Player: "${metadata.player}"` : null,
+      metadata.gradeTarget ? `Target: "${metadata.gradeTarget}"` : null,
+    ].filter(Boolean).join(', ');
+
+    addLog(`[Metadata] Applied bulk tags to ${cards.length} cards: ${tagSummary || 'Custom notes'}`);
+  };
+
+  const handleClearBulkMetadata = () => {
+    setCards(prev => prev.map(card => ({
+      ...card,
+      metadata: undefined
+    })));
+    addLog(`[Metadata] Cleared all metadata tags from ${cards.length} cards in queue.`);
+  };
+
+  const taggedCardsCount = cards.filter(c => c.metadata && (c.metadata.cardSeries || c.metadata.year || c.metadata.setName)).length;
+
+  const [settings, setSettings] = useState<ProcessingSettings>({
+    aspectRatio: 2.5 / 3.5,
+    jpegQuality: 95,
+    enableUpscaling: true,
+    enableDescratching: true,
+    restorationStrength: 0.5,
+    upscalingScale: 4,
+    backgroundColor: 'White',
+    autoCrop: true,
+    aiConfig: {
+      provider: AIProvider.Gemini,
+      modelId: 'gemini-3.1-flash-image'
+    },
+    // Calibrated High-Impact Wrestling Raw Card Settings (Prizm / Chrome Default)
+    brightness: 0.04,
+    contrast: 1.28,
+    saturation: 1.22,
+    vibrance: 0.35,
+    sharpen: 1.10,
+    descratchThreshold: 0.12,
+    descratchRadius: 2.5,
+    microDustFilter: true,
+    antiGlare: true,
+    chromeParallelClarity: true
+  });
+
+  const handleAutoCenterAllCards = useCallback(() => {
+    setCards(prev => prev.map(c => {
+      if (!c.quad) return c;
+      const centered = autoCenterQuad(c.quad, settings.aspectRatio);
+      return {
+        ...c,
+        quad: centered
+      };
+    }));
+    addLog(`✓ Auto-centered all ${cards.length} card crops to standard 50/50 ratio.`);
+  }, [cards.length, settings.aspectRatio]);
+
+  /**
+   * Bulk Auto-Crop: Runs computer vision edge detection logic on all queued cards simultaneously.
+   * Updates each card with live detecting status, calculates standard centering geometry, and saves the quad.
+   */
+  const handleBulkAutoCrop = async () => {
+    if (cards.length === 0 || isBulkCropping || isBatchRendering) return;
+    setIsBulkCropping(true);
+    const total = cards.length;
+    setBulkCropProgress({ processed: 0, total });
+    addLog(`[Bulk Auto-Crop] Starting simultaneous edge detection across all ${total} queued cards...`);
+
+    // Step 1: Set each card's status to 'detecting' simultaneously so live progress indicators render immediately
+    setCards(prev => prev.map(c => ({
+      ...c,
+      cropStatus: 'detecting'
+    })));
+
+    let completed = 0;
+
+    // Step 2: Run edge detection simultaneously on all queued cards
+    const cropPromises = cards.map(async (card) => {
+      try {
+        const img = new Image();
+        img.crossOrigin = 'anonymous';
+        await new Promise<void>((resolve, reject) => {
+          img.onload = () => resolve();
+          img.onerror = () => reject(new Error(`Failed to decode image data for ${card.file.name}`));
+          img.src = card.previewUrl;
+        });
+
+        const w = img.naturalWidth || img.width;
+        const h = img.naturalHeight || img.height;
+        const detectedQuad = detectCardEdges(img, settings.aspectRatio);
+        const centeringRes = calculateCardCentering(detectedQuad);
+        const symmetryScore = Math.max(0, Math.round(100 - Math.max(Math.abs(centeringRes.leftPct - 50), Math.abs(centeringRes.topPct - 50)) * 2));
+
+        // Immediately update this specific card's quad, dimensions, and detected crop status
+        setCards(prev => prev.map(c => c.id === card.id ? {
+          ...c,
+          originalWidth: w,
+          originalHeight: h,
+          quad: detectedQuad,
+          cropStatus: 'detected',
+          centering: {
+            leftRightRatio: centeringRes.lrRatioText,
+            topBottomRatio: centeringRes.tbRatioText,
+            symmetryScore
+          }
+        } : c));
+
+        completed++;
+        setBulkCropProgress({ processed: completed, total, currentCardName: card.file.name });
+        addLog(`[Bulk Auto-Crop] ✓ "${card.file.name}": ${centeringRes.centeringGrade} (L/R: ${centeringRes.lrRatioText}, ${symmetryScore}% symmetry)`);
+      } catch (err: any) {
+        console.error(`Edge detection error on ${card.file.name}:`, err);
+        setCards(prev => prev.map(c => c.id === card.id ? {
+          ...c,
+          cropStatus: 'failed'
+        } : c));
+        completed++;
+        setBulkCropProgress({ processed: completed, total, currentCardName: card.file.name });
+        addLog(`[Bulk Auto-Crop] ✗ "${card.file.name}": ${err?.message || 'Detection failed'}`);
+      }
+    });
+
+    await Promise.all(cropPromises);
+
+    setIsBulkCropping(false);
+    setBulkCropProgress(null);
+    addLog(`[Bulk Auto-Crop] ✓ Completed simultaneous edge detection for all ${total} cards.`);
+  };
+
+  const fileInputRef = useRef<HTMLInputElement>(null);
+  const logsEndRef = useRef<HTMLDivElement>(null);
+
+  const applySportsPreset = (presetId: string) => {
+    const matched = SPORTS_CARD_PRESETS.find(p => p.id === presetId);
+    if (!matched) return;
+    setActivePresetId(presetId);
+    setSettings(prev => ({
+      ...prev,
+      ...matched.settings
+    }));
+    addLog(`[Preset] Applied wrestling raw card preset: "${matched.name}"`);
+  };
+
+  // Auto-scroll logs
+  useEffect(() => {
+    logsEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+  }, [logs]);
+
+  // Check for interrupted batch sessions in IndexedDB on component mount
+  useEffect(() => {
+    getStoredBatchSession().then(stored => {
+      if (stored && stored.cards.length > 0) {
+        setSavedSession(stored);
+        const completed = stored.cards.filter(c => c.status === ProcessingStatus.Completed).length;
+        addLog(`[Session Storage] Detected saved batch session with ${stored.cards.length} cards (${completed} enhanced).`);
+      }
+    });
+  }, []);
+
+  // Timer effect for elapsed processing duration
+  useEffect(() => {
+    let timerInterval: any = null;
+    if (isBatchRendering && !isPaused) {
+      timerInterval = setInterval(() => {
+        setElapsedSeconds(prev => prev + 1);
+      }, 1000);
+    }
+    return () => {
+      if (timerInterval) clearInterval(timerInterval);
+    };
+  }, [isBatchRendering, isPaused]);
+
+  // Auto-save batch cards to IndexedDB when idle
+  useEffect(() => {
+    if (cards.length > 0 && !isBatchRendering) {
+      const debounceTimer = setTimeout(() => {
+        saveBatchSession(cards, settings);
+      }, 800);
+      return () => clearTimeout(debounceTimer);
+    }
+  }, [cards, settings, isBatchRendering]);
+
+  // Cleanup object URLs to prevent memory leaks
+  useEffect(() => {
+    return () => {
+      cards.forEach(card => {
+        URL.revokeObjectURL(card.previewUrl);
+        if (card.processedUrl && card.processedUrl.startsWith('blob:')) {
+          URL.revokeObjectURL(card.processedUrl);
+        }
+      });
+    };
+  }, []);
+
+  const addLog = (message: string) => {
+    const timestamp = new Date().toISOString().split('T')[1].split('.')[0];
+    setLogs(prev => [...prev, `[${timestamp}] ${message}`]);
+  };
+
+  const handleTogglePause = () => {
+    setIsPaused(prev => {
+      const next = !prev;
+      isPausedRef.current = next;
+      addLog(next ? '⏸️ Batch processing paused by user' : '▶️ Batch processing resumed');
+      return next;
+    });
+  };
+
+  const handleCancelBatch = () => {
+    isCancelledRef.current = true;
+    isPausedRef.current = false;
+    setIsPaused(false);
+    addLog('🛑 Halt signal sent to batch workers...');
+  };
+
+  const handleResumeSession = async (autoStart = true) => {
+    if (!savedSession) return;
+    const restoredCards = savedSession.cards;
+    if (savedSession.settings) {
+      setSettings(savedSession.settings);
+    }
+    setCards(restoredCards);
+    setSavedSession(null);
+    addLog(`[Session] Restored ${restoredCards.length} cards from saved session.`);
+
+    if (autoStart) {
+      const pendingCount = restoredCards.filter(c => c.status !== ProcessingStatus.Completed).length;
+      if (pendingCount > 0) {
+        addLog(`[Session] Auto-resuming ${pendingCount} pending cards...`);
+        // Slight delay to allow state to settle
+        setTimeout(() => {
+          handleApplyEnhancementsToAll(restoredCards, true);
+        }, 100);
+      } else {
+        addLog(`[Session] All ${restoredCards.length} cards are already enhanced.`);
+      }
+    }
+  };
+
+  const handleRestoreToQueue = () => {
+    if (!savedSession) return;
+    setCards(savedSession.cards);
+    if (savedSession.settings) {
+      setSettings(savedSession.settings);
+    }
+    setSavedSession(null);
+    addLog(`[Session] Loaded ${savedSession.cards.length} cards into workspace queue for inspection.`);
+  };
+
+  const handleDiscardSession = async () => {
+    await clearBatchSession();
+    setSavedSession(null);
+    addLog('[Session] Cleared saved batch session from storage.');
+  };
+
+  const processFiles = useCallback(async (fileList: FileList | File[]) => {
+      const MAX_SIZE_MB = 50;
+      const MAX_BATCH_SIZE = 250;
+      
+      const rawFiles = Array.from(fileList) as File[];
+      const extractedFiles: File[] = [];
+
+      // Expand any ZIP files asynchronously with live non-blocking throttling
+      for (const file of rawFiles) {
+        if (file.name.toLowerCase().endsWith('.zip') || file.type.includes('zip')) {
+          try {
+            addLog(`📦 Extracting ZIP archive: "${file.name}"...`);
+            const unzipped = await unpackZipFile(file, file.name, {
+              chunkSize: 4,
+              onProgress: (p) => {
+                if (p.processed % 15 === 0 || p.processed === p.total) {
+                  addLog(`📦 Unpacking "${file.name}": ${p.processed}/${p.total} cards (${p.percent}%)`);
+                }
+              }
+            });
+            extractedFiles.push(...unzipped);
+            addLog(`✓ Extracted ${unzipped.length} cards from "${file.name}"`);
+          } catch (zipErr: any) {
+            addLog(`❌ Failed to extract ZIP "${file.name}": ${zipErr.message}`);
+          }
+        } else if (file.type.startsWith('image/')) {
+          extractedFiles.push(file);
+        }
+      }
+      
+      if (extractedFiles.length > MAX_BATCH_SIZE) {
+          addLog(`Notice: Selected ${extractedFiles.length} files. Queueing first ${MAX_BATCH_SIZE}.`);
+      }
+
+      const acceptedFiles = extractedFiles.slice(0, MAX_BATCH_SIZE);
+      let skippedCount = 0;
+      const newCardsToAdd: CardImage[] = [];
+
+      acceptedFiles.forEach(file => {
+        if (!file.type.startsWith('image/')) return;
+        if (file.size > MAX_SIZE_MB * 1024 * 1024) {
+            skippedCount++;
+            return;
+        }
+
+        const previewUrl = URL.createObjectURL(file);
+        const cardId = Math.random().toString(36).substring(2, 11);
+
+        newCardsToAdd.push({
+            id: cardId,
+            file,
+            previewUrl,
+            status: ProcessingStatus.Pending,
+            originalWidth: 0,
+            originalHeight: 0
+        });
+      });
+
+      if (newCardsToAdd.length > 0) {
+        // Enqueue cards into UI in a single atomic state batch
+        setCards(prev => [...prev, ...newCardsToAdd]);
+        addLog(`Added ${newCardsToAdd.length} cards to batch queue. Starting non-blocking edge analysis...`);
+
+        // Process edge detection in a throttled non-blocking worker queue (2 workers, yielding between items)
+        const queue = [...newCardsToAdd];
+        const totalToScan = queue.length;
+        let scannedCount = 0;
+        setScanQueueProgress({ processed: 0, total: totalToScan });
+
+        const scanWorker = async () => {
+          while (queue.length > 0) {
+            const item = queue.shift();
+            if (!item) break;
+
+            await new Promise<void>((resolve) => {
+              const probeImg = new Image();
+              probeImg.crossOrigin = 'anonymous';
+              probeImg.onload = () => {
+                const w = probeImg.naturalWidth || probeImg.width;
+                const h = probeImg.naturalHeight || probeImg.height;
+                const detectedQuad = detectCardEdges(probeImg, settings.aspectRatio);
+
+                setCards(prev => prev.map(c => 
+                  c.id === item.id 
+                    ? { 
+                        ...c, 
+                        originalWidth: w, 
+                        originalHeight: h,
+                        quad: detectedQuad
+                      } 
+                    : c
+                ));
+                scannedCount++;
+                setScanQueueProgress({ processed: scannedCount, total: totalToScan });
+                resolve();
+              };
+              probeImg.onerror = () => {
+                scannedCount++;
+                setScanQueueProgress({ processed: scannedCount, total: totalToScan });
+                resolve();
+              };
+              probeImg.src = item.previewUrl;
+            });
+
+            // Non-blocking yield to event loop
+            await new Promise(r => setTimeout(r, 12));
+          }
+        };
+
+        Promise.all([scanWorker(), scanWorker()]).then(() => {
+          setScanQueueProgress(null);
+          addLog(`✓ Edge analysis complete for ${totalToScan} cards.`);
+        });
+      }
+
+      if (skippedCount > 0) {
+          addLog(`Skipped ${skippedCount} files larger than ${MAX_SIZE_MB}MB.`);
+      }
+  }, [settings.aspectRatio]);
+
+  // Synchronize initialFiles from directory drops passed via props
+  useEffect(() => {
+    if (initialFiles && initialFiles.length > 0) {
+      processFiles(initialFiles);
+      if (folderName) {
+        addLog(`📁 Directory Batch enqueued: "${folderName}" (${initialFiles.length} cards)`);
+      }
+      onClearInitialFiles?.();
+    }
+  }, [initialFiles, folderName, processFiles, onClearInitialFiles]);
+
+  // Synchronize dynamic directory enqueue events
+  useEffect(() => {
+    const handleEnqueueEvent = (e: Event) => {
+      const customEvent = e as CustomEvent<{ files: File[]; folderName?: string }>;
+      if (customEvent.detail && customEvent.detail.files && customEvent.detail.files.length > 0) {
+        processFiles(customEvent.detail.files);
+        if (customEvent.detail.folderName) {
+          addLog(`📁 Directory Batch enqueued: "${customEvent.detail.folderName}" (${customEvent.detail.files.length} cards)`);
+        }
+      }
+    };
+
+    window.addEventListener('batch-queue-enqueue', handleEnqueueEvent);
+    return () => {
+      window.removeEventListener('batch-queue-enqueue', handleEnqueueEvent);
+    };
+  }, [processFiles]);
+
+  const onDrop = useCallback(async (acceptedFiles: File[], fileRejections: any, event: any) => {
+    if (event?.dataTransfer) {
+      try {
+        const scanned = await scanDroppedItems(event.dataTransfer, acceptedFiles);
+        if (scanned.files.length > 0) {
+          await processFiles(scanned.files);
+          if (scanned.directoryName) {
+            addLog(`📁 Loaded "${scanned.directoryName}" (${scanned.files.length} cards)`);
+          }
+          return;
+        }
+      } catch (err: any) {
+        console.warn("Scan dropped items fallback:", err);
+      }
+    }
+
+    if (acceptedFiles && acceptedFiles.length > 0) {
+      await processFiles(acceptedFiles);
+    }
+  }, [processFiles]);
+
+  const { getRootProps, getInputProps, isDragActive } = useDropzone({
+    onDrop,
+    accept: {
+      'image/*': ['.png', '.jpg', '.jpeg', '.webp', '.bmp', '.tiff', '.heic', '.gif'],
+      'application/zip': ['.zip'],
+      'application/x-zip-compressed': ['.zip']
+    },
+    noClick: true,
+    noKeyboard: true
+  });
+
+  const handleFileSelect = async (event: React.ChangeEvent<HTMLInputElement>) => {
+    if (event.target.files) {
+        await processFiles(event.target.files);
+    }
+    if (fileInputRef.current) fileInputRef.current.value = '';
+  };
+
+  const clearAll = () => {
+      if (isBatchRendering || isProcessing) {
+          if (!window.confirm("Processing is active. Are you sure you want to stop and clear?")) return;
+      }
+      isCancelledRef.current = true;
+      isPausedRef.current = false;
+      setIsPaused(false);
+      setIsBatchRendering(false);
+      cards.forEach(c => {
+          URL.revokeObjectURL(c.previewUrl);
+          if (c.processedUrl && c.processedUrl.startsWith('blob:')) {
+            URL.revokeObjectURL(c.processedUrl);
+          }
+      });
+      setCards([]);
+      setSelectedCardForView(null);
+      clearBatchSession();
+      setSavedSession(null);
+      addLog("Queue cleared. Memory and storage released.");
+  };
+
+  /**
+   * BULK ENHANCE PIPELINE (5-Step Asynchronous Execution)
+   * 1. Identifies all items in the current queue on the BatchCropper page.
+   * 2. Retrieves active EnhancementSettings (brightness, contrast, descratch) from application state.
+   * 3. For each queued item:
+   *    a. Applies active EnhancementSettings using existing optical enhancement pipeline.
+   *    b. Updates item status in UI list to "Enhanced" (ProcessingStatus.Completed).
+   *    c. Logs enhancement action with timestamp and applied settings.
+   * 4. Runs asynchronously with non-blocking concurrency to keep UI fluid.
+   * 5. Provides rich completion feedback toast and status message.
+   */
+  const handleApplyEnhancementsToAll = async (cardsOverride?: CardImage[], onlyPending = false) => {
+    // Step 1: Identify all items in the current queue on the BatchCropper page
+    const currentCards = cardsOverride || cards;
+    if (currentCards.length === 0) {
+      setEnhancementToast({
+        type: 'warning',
+        title: 'Queue Is Empty',
+        message: 'No card images found in the queue. Please drag & drop or load cards first.',
+        count: 0,
+        timestamp: new Date().toLocaleTimeString(),
+        settingsSummary: 'None'
+      });
+      addLog(`[${new Date().toLocaleTimeString()}] [Bulk Enhance] Queue is empty. No cards to process.`);
+      return;
+    }
+
+    if (isBatchRendering || isProcessing) return;
+
+    // Step 2: Retrieve currently active EnhancementSettings (brightness, contrast, descratch) from application state
+    const activeBrightness = settings.brightness ?? 0;
+    const activeContrast = settings.contrast ?? 1.0;
+    const isDescratchActive = !!settings.enableDescratching;
+    const descratchRadius = settings.descratchRadius ?? 2.0;
+    const descratchThreshold = settings.descratchThreshold ?? 0.15;
+    const activeSharpen = settings.sharpen ?? 1.0;
+
+    const brightnessStr = `${activeBrightness >= 0 ? '+' : ''}${Math.round(activeBrightness * 100)}%`;
+    const contrastStr = `${Math.round(activeContrast * 100)}%`;
+    const descratchStr = isDescratchActive ? `ON (r:${descratchRadius}px, th:${descratchThreshold})` : 'OFF';
+    const settingsSummary = `Brightness: ${brightnessStr}, Contrast: ${contrastStr}, Descratch: ${descratchStr}`;
+
+    setIsBatchRendering(true);
+    setIsPaused(false);
+    isPausedRef.current = false;
+    isCancelledRef.current = false;
+    setElapsedSeconds(0);
+    setThroughputCardsPerSec(0);
+    setAvgMsPerCard(0);
+    setEstimatedSecondsRemaining(null);
+
+    const cardsToProcess = onlyPending 
+      ? currentCards.filter(c => c.status !== ProcessingStatus.Completed)
+      : [...currentCards];
+
+    if (cardsToProcess.length === 0 && onlyPending) {
+      setEnhancementToast({
+        type: 'success',
+        title: 'All Cards Already Enhanced',
+        message: `All ${currentCards.length} cards in the queue have already been enhanced with active settings.`,
+        count: currentCards.length,
+        timestamp: new Date().toLocaleTimeString(),
+        settingsSummary
+      });
+      setIsBatchRendering(false);
+      return;
+    }
+
+    const totalCount = currentCards.length;
+    const initialCompleted = totalCount - cardsToProcess.length;
+    let completedCounter = initialCompleted;
+    let completedInRun = 0;
+    let failedInRun = 0;
+
+    setBatchRenderProgress({ completed: completedCounter, total: totalCount });
+    const runStartTime = performance.now();
+    const startTimestamp = new Date().toLocaleTimeString();
+
+    addLog(`[${startTimestamp}] [Bulk Enhance] Starting asynchronous enhancement for ${cardsToProcess.length} cards with active settings: [${settingsSummary}]...`);
+
+    // Set queued cards to Processing status in the UI list
+    setCards(prev => prev.map(c => {
+      if (!onlyPending || c.status !== ProcessingStatus.Completed) {
+        return { ...c, status: ProcessingStatus.Processing };
+      }
+      return c;
+    }));
+
+    const results: any[] = [];
+    const MAX_CONCURRENT_WORKERS = 3;
+
+    // Step 4: Run asynchronously with worker pool & non-blocking execution
+    const worker = async () => {
+      while (cardsToProcess.length > 0) {
+        if (isCancelledRef.current) break;
+
+        // Yield while paused by user
+        while (isPausedRef.current && !isCancelledRef.current) {
+          await new Promise(r => setTimeout(r, 100));
+        }
+        if (isCancelledRef.current) break;
+
+        const card = cardsToProcess.shift();
+        if (!card) break;
+
+        setActiveProcessingCardName(card.file.name);
+        const cardStartTime = performance.now();
+
+        try {
+          // Decode image asynchronously
+          const img = new Image();
+          img.crossOrigin = 'anonymous';
+
+          await new Promise<void>((resolve, reject) => {
+            img.onload = () => resolve();
+            img.onerror = () => reject(new Error(`Failed to decode image data for "${card.file.name}"`));
+            img.src = card.previewUrl;
+          });
+
+          if (isCancelledRef.current) break;
+
+          // Determine perspective quadrilateral crop boundaries
+          const effectiveQuad: CropQuad = card.quad || (settings.autoCrop 
+            ? detectCardEdges(img, settings.aspectRatio) 
+            : {
+                topLeft: { x: 0, y: 0 },
+                topRight: { x: 1, y: 0 },
+                bottomRight: { x: 1, y: 1 },
+                bottomLeft: { x: 0, y: 1 }
+              });
+
+          // Step 3a: Apply active EnhancementSettings using the system's existing enhancement pipeline
+          const effectiveSettings: ProcessingSettings = {
+            ...settings,
+            ...(card.customSettings || {})
+          };
+
+          const result = await processCardComplete(img, effectiveQuad, effectiveSettings);
+
+          completedCounter++;
+          completedInRun++;
+          setBatchRenderProgress({ completed: completedCounter, total: totalCount });
+
+          // Step 3b: Update item's status in the UI list to "Enhanced" (ProcessingStatus.Completed)
+          setCards(prev => prev.map(c => 
+            c.id === card.id 
+              ? { 
+                  ...c, 
+                  status: ProcessingStatus.Completed, 
+                  processedUrl: result.blobUrl,
+                  originalWidth: result.width,
+                  originalHeight: result.height,
+                  quad: effectiveQuad
+                } 
+              : c
+          ));
+
+          // Real-time calculation of throughput & time remaining
+          const now = performance.now();
+          const elapsedSec = (now - runStartTime) / 1000;
+          if (elapsedSec > 0.2 && completedInRun > 0) {
+            const rate = completedInRun / elapsedSec;
+            const remaining = totalCount - completedCounter;
+            const etaSec = rate > 0 ? remaining / rate : 0;
+            const avgMs = (now - runStartTime) / completedInRun;
+            setThroughputCardsPerSec(rate);
+            setAvgMsPerCard(avgMs);
+            setEstimatedSecondsRemaining(etaSec);
+          }
+
+          // Persist to IndexedDB so batch session is crash-proof
+          updateCardRecordInSession(
+            card.id, 
+            ProcessingStatus.Completed, 
+            result.blob, 
+            result.width, 
+            result.height
+          );
+
+          // Step 3c: Log the enhancement action with timestamp and applied settings
+          const cardDuration = Math.round(performance.now() - cardStartTime);
+          const cardTimestamp = new Date().toLocaleTimeString();
+          const cardSettingsSummary = `Brightness: ${(effectiveSettings.brightness ?? 0) >= 0 ? '+' : ''}${Math.round((effectiveSettings.brightness ?? 0) * 100)}%, Contrast: ${Math.round((effectiveSettings.contrast ?? 1) * 100)}%, Descratch: ${effectiveSettings.enableDescratching ? `ON (r:${effectiveSettings.descratchRadius}, th:${effectiveSettings.descratchThreshold})` : 'OFF'}`;
+          addLog(`[${cardTimestamp}] [Bulk Enhance] ✓ "${card.file.name}" Enhanced (${result.width}x${result.height}) [${cardSettingsSummary}] in ${cardDuration}ms`);
+
+          results.push({
+            cardId: card.id,
+            fileName: card.file.name,
+            blob: result.blob,
+            blobUrl: result.blobUrl,
+            width: result.width,
+            height: result.height
+          });
+        } catch (err: any) {
+          // Graceful error handling: skip failed item, mark Failed, log with timestamp, notify
+          failedInRun++;
+          const errTimestamp = new Date().toLocaleTimeString();
+          addLog(`[${errTimestamp}] [Bulk Enhance ERROR] ✗ Skipped "${card.file.name}": ${err?.message || 'Enhancement failed'}`);
+          setCards(prev => prev.map(c => 
+            c.id === card.id ? { ...c, status: ProcessingStatus.Failed } : c
+          ));
+          updateCardRecordInSession(card.id, ProcessingStatus.Failed);
+        }
+
+        // Step 4: Asynchronous yield to main thread to prevent frame drops & UI blocking
+        await new Promise(r => setTimeout(r, 10));
+      }
+    };
+
+    const workerPromises = Array.from(
+      { length: Math.min(MAX_CONCURRENT_WORKERS, cardsToProcess.length + 1) }, 
+      () => worker()
+    );
+
+    await Promise.all(workerPromises);
+    const totalTime = Math.round(performance.now() - runStartTime);
+    const finishTimestamp = new Date().toLocaleTimeString();
+
+    setActiveProcessingCardName(null);
+    setIsBatchRendering(false);
+    setIsPaused(false);
+    isPausedRef.current = false;
+
+    // Step 5: Provide feedback to the user upon completion (toast and status message)
+    if (isCancelledRef.current) {
+      addLog(`[${finishTimestamp}] [Bulk Enhance] Bulk processing halted by user.`);
+      setEnhancementToast({
+        type: 'warning',
+        title: 'Bulk Enhancement Halted',
+        message: `Processing cancelled by user. Enhanced ${completedInRun} cards before stopping.`,
+        count: completedInRun,
+        timestamp: finishTimestamp,
+        settingsSummary
+      });
+    } else {
+      const successCount = completedInRun - failedInRun;
+      addLog(`[${finishTimestamp}] [Bulk Enhance] Finished ${completedCounter}/${totalCount} cards in ${(totalTime / 1000).toFixed(1)}s with settings [${settingsSummary}].`);
+
+      setEnhancementToast({
+        type: failedInRun > 0 ? 'warning' : 'success',
+        title: failedInRun > 0 ? 'Bulk Enhance Completed with Warnings' : 'Bulk Enhancement Complete!',
+        message: `Successfully enhanced ${successCount} of ${cardsToProcess.length} cards in ${(totalTime / 1000).toFixed(1)}s.${failedInRun > 0 ? ` (${failedInRun} card${failedInRun > 1 ? 's' : ''} skipped due to decode errors)` : ''}`,
+        count: successCount,
+        timestamp: finishTimestamp,
+        settingsSummary,
+        failedCount: failedInRun
+      });
+    }
+  };
+
+  // Alias for semantic clarity
+  const handleBulkEnhance = handleApplyEnhancementsToAll;
+
+  /**
+   * Reset enhancements and revert to original scans
+   */
+  const handleResetEnhancements = () => {
+    cards.forEach(c => {
+      if (c.processedUrl && c.processedUrl.startsWith('blob:')) {
+        URL.revokeObjectURL(c.processedUrl);
+      }
+    });
+    setCards(prev => prev.map(c => ({
+      ...c,
+      status: ProcessingStatus.Pending,
+      processedUrl: undefined
+    })));
+    addLog("Reverted all cards to original scans.");
+  };
+
+  /**
+   * Bulk Export: Download compressed ZIP containing all enhanced images + JSON / CSV manifests
+   */
+  const handleDownloadBatchZip = async () => {
+    if (cards.length === 0) return;
+    setIsDownloading(true);
+
+    try {
+      addLog(`Preparing Batch ZIP Archive for ${cards.length} cards...`);
+      const zip = new JSZip();
+      const imagesFolder = zip.folder("cards") || zip;
+
+      const exportPromises = cards.map(async (card, idx) => {
+        let exportBlob: Blob;
+
+        if (card.processedUrl) {
+          const response = await fetch(card.processedUrl);
+          exportBlob = await response.blob();
+        } else {
+          // If not yet enhanced, process now on-the-fly
+          const img = new Image();
+          img.crossOrigin = 'anonymous';
+          await new Promise<void>((resolve, reject) => {
+            img.onload = () => resolve();
+            img.onerror = () => reject(new Error(`Failed to load ${card.file.name}`));
+            img.src = card.previewUrl;
+          });
+
+          const effectiveQuad: CropQuad = card.quad || (settings.autoCrop 
+            ? detectCardEdges(img, settings.aspectRatio) 
+            : {
+                topLeft: { x: 0, y: 0 },
+                topRight: { x: 1, y: 0 },
+                bottomRight: { x: 1, y: 1 },
+                bottomLeft: { x: 0, y: 1 }
+              });
+
+          const result = await processCardComplete(img, effectiveQuad, settings);
+          exportBlob = result.blob;
+        }
+
+        const enhancedFileName = getEnhancedFileName(card, { useMetadataPrefix: true });
+        imagesFolder.file(enhancedFileName, exportBlob);
+      });
+
+      await Promise.all(exportPromises);
+
+      // Add Manifests with rich metadata tags matching exact image filenames
+      const manifestJSON = cards.map(c => {
+        const enhancedFileName = getEnhancedFileName(c, { useMetadataPrefix: true });
+        const meta = c.metadata;
+        return {
+          fileName: c.file.name,
+          enhancedName: enhancedFileName,
+          originalSize: `${c.originalWidth || 0}x${c.originalHeight || 0}`,
+          status: c.status,
+          sport: meta?.sport || null,
+          league: meta?.league || null,
+          manufacturer: meta?.manufacturer || null,
+          cardSeries: meta?.cardSeries || null,
+          year: meta?.year || null,
+          setName: meta?.setName || null,
+          parallel: meta?.parallel || null,
+          player: meta?.player || null,
+          autographed: meta?.autographed || null,
+          printRun: meta?.printRun || null,
+          gradeTarget: meta?.gradeTarget || null,
+          price: meta?.price || null,
+          notes: meta?.notes || null
+        };
+      });
+      zip.file("manifest.json", JSON.stringify(manifestJSON, null, 2));
+
+      // 1. Structured Catalog CSV (strictly matching enhanced asset filenames)
+      const catalogCsv = generateCatalogCsv(cards, { useMetadataPrefix: true });
+      zip.file("manifest.csv", catalogCsv);
+
+      // 2. eBay File Exchange CSV (Category 261328: Trading Card Singles with CustomLabel matching assets)
+      const ebayCsv = generateEbayExchangeCsv(cards, { useMetadataPrefix: true });
+      zip.file("ebay_trading_cards_cat_261328.csv", ebayCsv);
+
+      addLog("Compressing archive with matched CSV spreadsheets...");
+      const zipBlob = await zip.generateAsync({
+        type: "blob",
+        compression: "DEFLATE",
+        compressionOptions: { level: 6 }
+      });
+
+      const downloadUrl = URL.createObjectURL(zipBlob);
+      const link = document.createElement('a');
+      link.href = downloadUrl;
+      link.download = `cardcrop_batch_${Date.now()}.zip`;
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      URL.revokeObjectURL(downloadUrl);
+
+      const sizeMB = (zipBlob.size / (1024 * 1024)).toFixed(2);
+      addLog(`[Export] Successfully downloaded "cardcrop_batch_${Date.now()}.zip" (${sizeMB} MB)!`);
+    } catch (err: any) {
+      console.error(err);
+      addLog(`[Export ERROR] Failed to generate ZIP: ${err?.message || err}`);
+    } finally {
+      setIsDownloading(false);
+    }
+  };
+
+  const completedCount = cards.filter(c => c.status === ProcessingStatus.Completed).length;
+
+  return (
+    <div className="flex flex-col h-full bg-[#070b12] text-slate-100 overflow-hidden font-sans">
+      
+      {/* Top Action Toolbar */}
+      <div className="p-3 md:px-6 bg-[#0c121e] border-b border-cyan-500/20 flex flex-wrap items-center justify-between gap-3 shadow-md z-10">
+        
+        {/* Left: Queue Info & Upload */}
+        <div className="flex items-center gap-3">
+            <div className="flex items-center gap-2">
+               <div className="p-1.5 rounded-lg bg-cyan-500/10 border border-cyan-400/40 text-cyan-300">
+                 <Layers size={18} />
+               </div>
+               <div>
+                 <h2 className="text-xs font-bold font-mono text-cyan-300 uppercase tracking-wider">
+                   Batch Card Editor
+                 </h2>
+                 <div className="flex items-center gap-2">
+                   <p className="text-[10px] font-mono text-slate-400">
+                     {cards.length} Cards in Queue • {completedCount} Enhanced
+                   </p>
+                   {scanQueueProgress && (
+                     <span className="text-[10px] font-mono text-cyan-400 flex items-center gap-1 bg-cyan-950/80 px-2 py-0.5 rounded border border-cyan-500/40">
+                       <Loader2 size={10} className="animate-spin text-cyan-300" />
+                       Scanning: {scanQueueProgress.processed}/{scanQueueProgress.total}
+                     </span>
+                   )}
+                 </div>
+               </div>
+            </div>
+
+            <div className="h-5 w-px bg-slate-800 mx-1 hidden sm:block" />
+
+            <button 
+              onClick={() => fileInputRef.current?.click()}
+              className="px-3 py-1.5 rounded-md bg-cyan-500/10 hover:bg-cyan-500/20 border border-cyan-400/50 text-cyan-300 text-xs font-mono font-semibold flex items-center gap-1.5 transition-colors"
+            >
+              <Upload size={13} />
+              <span>Add Cards</span>
+            </button>
+
+            <button
+              id="btn-batch-open-settings"
+              onClick={() => setIsSettingsModalOpen(true)}
+              className="px-2.5 py-1.5 rounded-md bg-slate-900/80 hover:bg-slate-800 border border-slate-700 hover:border-cyan-500/50 text-slate-300 hover:text-cyan-300 text-xs font-mono font-medium flex items-center gap-1.5 transition-colors"
+              title="Configure API Keys (Gemini, OpenRouter, Venice, OpenAI, xAI) & Railway Backend"
+            >
+              <Settings2 size={13} className="text-cyan-400" />
+              <span className="hidden sm:inline">Settings</span>
+            </button>
+
+            {cards.length > 0 && (
+              <>
+                <button
+                  id="btn-bulk-auto-crop"
+                  onClick={handleBulkAutoCrop}
+                  disabled={cards.length === 0 || isBulkCropping || isBatchRendering}
+                  className="px-3 py-1.5 rounded-md bg-amber-500/20 hover:bg-amber-500/30 border border-amber-400/60 text-amber-300 hover:text-amber-200 text-xs font-mono font-bold flex items-center gap-1.5 transition-all shadow-[0_0_12px_rgba(245,158,11,0.25)] disabled:opacity-40 disabled:cursor-not-allowed"
+                  title="Run computer-vision edge detection simultaneously on all queued cards with live progress per card"
+                >
+                  {isBulkCropping ? (
+                    <Loader2 size={13} className="animate-spin text-amber-300" />
+                  ) : (
+                    <Crop size={13} className="text-amber-400" />
+                  )}
+                  <span>
+                    {isBulkCropping
+                      ? `Auto-Cropping (${bulkCropProgress?.processed || 0}/${cards.length})...`
+                      : 'Bulk Auto-Crop'}
+                  </span>
+                </button>
+
+                <button
+                  id="btn-auto-center-all-cards"
+                  onClick={handleAutoCenterAllCards}
+                  className="px-3 py-1.5 rounded-md bg-cyan-950/60 hover:bg-cyan-900/60 border border-cyan-500/50 text-cyan-300 text-xs font-mono font-semibold flex items-center gap-1.5 transition-colors shadow-sm"
+                  title="Square and 50/50 center crop quads for all cards in the batch queue"
+                >
+                  <Crop size={13} className="text-cyan-400" />
+                  <span>Center All (50/50)</span>
+                </button>
+
+                <button
+                  id="btn-open-batch-metadata"
+                  onClick={() => setIsMetadataModalOpen(true)}
+                  className="px-3 py-1.5 rounded-md bg-cyan-950/60 hover:bg-cyan-900/60 border border-cyan-500/50 text-cyan-300 text-xs font-mono font-semibold flex items-center gap-1.5 transition-colors shadow-sm"
+                  title="Bulk edit series, release year, player, and grading metadata for all cards in queue"
+                >
+                  <Tag size={13} className="text-cyan-400" />
+                  <span>Batch Metadata</span>
+                </button>
+
+                <button 
+                  onClick={clearAll}
+                  className="px-2.5 py-1.5 rounded-md hover:bg-red-500/20 text-slate-400 hover:text-red-300 border border-slate-700 hover:border-red-500/50 text-xs font-mono transition-colors flex items-center gap-1"
+                  title="Clear all cards from batch queue"
+                >
+                  <Trash2 size={12} />
+                  <span className="hidden md:inline">Clear</span>
+                </button>
+              </>
+            )}
+        </div>
+
+        {/* Center: Live Preview Mode Switcher */}
+        {cards.length > 0 && (
+          <div className="flex items-center gap-1 bg-black/50 p-1 rounded-lg border border-slate-800">
+            <button
+              id="btn-preview-enhanced"
+              onClick={() => setPreviewMode('enhanced')}
+              className={`px-3 py-1 rounded text-[11px] font-mono font-medium transition-all ${
+                previewMode === 'enhanced'
+                  ? 'bg-cyan-500 text-black font-bold shadow-[0_0_10px_rgba(0,243,255,0.4)]'
+                  : 'text-slate-400 hover:text-slate-200'
+              }`}
+            >
+              Enhanced View
+            </button>
+            <button
+              id="btn-preview-original"
+              onClick={() => setPreviewMode('original')}
+              className={`px-3 py-1 rounded text-[11px] font-mono font-medium transition-all ${
+                previewMode === 'original'
+                  ? 'bg-slate-700 text-white font-bold'
+                  : 'text-slate-400 hover:text-slate-200'
+              }`}
+            >
+              Original Scans
+            </button>
+            <button
+              id="btn-preview-compare"
+              onClick={() => setPreviewMode('compare')}
+              className={`px-3 py-1 rounded text-[11px] font-mono font-medium flex items-center gap-1.5 transition-all ${
+                previewMode === 'compare'
+                  ? 'bg-indigo-600 text-white font-bold shadow-[0_0_12px_rgba(99,102,241,0.5)]'
+                  : 'text-slate-400 hover:text-cyan-300'
+              }`}
+              title="Toggle Simultaneous Queue Compare Mode (Key: C)"
+            >
+              <ArrowRightLeft size={12} />
+              <span>Compare Mode</span>
+            </button>
+            <button
+              id="btn-open-compare-lightbox"
+              onClick={() => {
+                setCompareActiveCardId(cards[0]?.id || null);
+                setIsCompareLightboxOpen(true);
+              }}
+              className="px-2 py-1 rounded text-[11px] font-mono text-cyan-400 hover:text-cyan-200 hover:bg-cyan-500/10 border border-cyan-500/30 transition-colors flex items-center gap-1"
+              title="Open Fullscreen Compare Lightbox (Key: L)"
+            >
+              <Maximize2 size={12} />
+              <span className="hidden xl:inline">Lightbox</span>
+            </button>
+          </div>
+        )}
+
+        {/* Right: Primary Batch Execution Buttons */}
+        <div className="flex items-center gap-2">
+            <button 
+              id="btn-bulk-enhance"
+              onClick={() => handleBulkEnhance()}
+              disabled={cards.length === 0 || isBatchRendering || isProcessing}
+              className="px-4 py-1.5 rounded-md text-xs font-bold flex items-center gap-2 font-mono bg-cyan-400 hover:bg-cyan-300 text-slate-950 shadow-[0_0_18px_rgba(0,243,255,0.4)] disabled:opacity-40 disabled:cursor-not-allowed transition-all"
+              title="Bulk Enhance: Apply active brightness, contrast, and descratching settings across all queued cards"
+            >
+              {isBatchRendering ? <Loader2 className="animate-spin text-slate-950" size={14} /> : <Sparkles size={14} />}
+              {isBatchRendering 
+                ? `ENHANCING (${batchRenderProgress.completed}/${batchRenderProgress.total})...` 
+                : 'BULK ENHANCE'}
+            </button>
+
+            <button 
+              id="btn-topbar-export-csv"
+              onClick={() => setIsCsvModalOpen(true)}
+              disabled={cards.length === 0}
+              className="px-3.5 py-1.5 rounded-md text-xs font-bold flex items-center gap-1.5 font-mono bg-emerald-600 hover:bg-emerald-500 text-white shadow-[0_0_15px_rgba(16,185,129,0.3)] disabled:opacity-40 disabled:cursor-not-allowed transition-all"
+              title="Export structured CSV metadata spreadsheet matching cropped image filenames (Catalog & eBay Cat #261328)"
+            >
+              <FileSpreadsheet size={14} />
+              <span className="hidden sm:inline">EXPORT CSV</span>
+            </button>
+
+            <button 
+              onClick={handleDownloadBatchZip}
+              disabled={cards.length === 0 || isDownloading || isBatchRendering}
+              className="px-3.5 py-1.5 rounded-md text-xs font-bold flex items-center gap-1.5 font-mono bg-indigo-600 hover:bg-indigo-500 text-white shadow-[0_0_15px_rgba(99,102,241,0.3)] disabled:opacity-40 disabled:cursor-not-allowed transition-all"
+              title="Download all enhanced card images in full resolution with manifests as a ZIP"
+            >
+              {isDownloading ? <Loader2 className="animate-spin" size={14} /> : <Download size={14} />}
+              <span>DOWNLOAD ZIP</span>
+            </button>
+        </div>
+        <input 
+          type="file" 
+          multiple 
+          accept="image/*,.zip,application/zip,application/x-zip-compressed" 
+          ref={fileInputRef} 
+          className="hidden" 
+          onChange={handleFileSelect}
+        />
+      </div>
+
+      {/* Visual Time Remaining, Speed Throughput & Processing Controls Bar */}
+      <BatchProcessingProgressBar
+        isRendering={isBatchRendering}
+        isPaused={isPaused}
+        completed={batchRenderProgress.completed}
+        total={batchRenderProgress.total}
+        throughputCardsPerSec={throughputCardsPerSec}
+        avgMsPerCard={avgMsPerCard}
+        estimatedSecondsRemaining={estimatedSecondsRemaining}
+        elapsedSeconds={elapsedSeconds}
+        currentFileName={activeProcessingCardName}
+        onTogglePause={handleTogglePause}
+        onCancel={handleCancelBatch}
+      />
+
+      {/* Visual Bulk Auto-Crop Real-time Progress Bar */}
+      {isBulkCropping && bulkCropProgress && (
+        <div className="w-full bg-gradient-to-r from-amber-950/95 via-amber-900/90 to-amber-950/95 border-b border-amber-500/50 px-4 py-2.5 flex flex-wrap items-center justify-between gap-3 text-amber-200 text-xs font-mono backdrop-blur-md shadow-lg z-20">
+          <div className="flex items-center gap-2.5">
+            <div className="p-1 rounded bg-amber-500/20 border border-amber-400/50 text-amber-300">
+              <Loader2 size={15} className="animate-spin text-amber-400" />
+            </div>
+            <div>
+              <div className="flex items-center gap-2">
+                <span className="font-bold text-amber-300 uppercase tracking-wider text-[11px]">
+                  Bulk Auto-Crop Running
+                </span>
+                <span className="text-[10px] bg-amber-500/20 border border-amber-400/40 text-amber-200 px-1.5 py-0.2 rounded font-bold">
+                  Simultaneous Edge Detection
+                </span>
+              </div>
+              <p className="text-[10px] text-amber-200/80 leading-tight mt-0.5">
+                Analyzing quadrilateral card contours for all {bulkCropProgress.total} cards in parallel
+                {bulkCropProgress.currentCardName && <span className="text-amber-100 font-semibold ml-1.5">• "{bulkCropProgress.currentCardName}"</span>}
+              </p>
+            </div>
+          </div>
+          <div className="flex items-center gap-3">
+            <span className="text-xs font-bold text-amber-300 font-mono">
+              {bulkCropProgress.processed} / {bulkCropProgress.total} cards ({Math.round((bulkCropProgress.processed / (bulkCropProgress.total || 1)) * 100)}%)
+            </span>
+            <div className="w-36 bg-black/70 rounded-full h-2.5 overflow-hidden border border-amber-500/40">
+              <div 
+                className="bg-amber-400 h-full transition-all duration-150 shadow-[0_0_12px_rgba(245,158,11,0.9)]"
+                style={{ width: `${Math.round((bulkCropProgress.processed / (bulkCropProgress.total || 1)) * 100)}%` }}
+              />
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Bulk-Action Metadata Panel: 1-Click Card Series, Year & Set Assignment Before Export */}
+      {cards.length > 0 && (
+        <BatchBulkActionPanel
+          totalCards={cards.length}
+          activeMetadataCount={taggedCardsCount}
+          onApplyMetadata={handleApplyBulkMetadata}
+          onClearMetadata={handleClearBulkMetadata}
+          onStartExport={handleDownloadBatchZip}
+          onApplyEnhancements={() => handleApplyEnhancementsToAll()}
+          onBulkAutoCrop={handleBulkAutoCrop}
+          isBulkCropping={isBulkCropping}
+          onOpenCsvExport={() => setIsCsvModalOpen(true)}
+          isProcessing={isBatchRendering}
+          isExporting={isDownloading}
+        />
+      )}
+
+      {/* Compare Mode Queue Toolbar: Synchronized Slider, Layout Switcher & Lightbox Launch */}
+      {cards.length > 0 && previewMode === 'compare' && (
+        <BatchCompareBar
+          totalCards={cards.length}
+          enhancedCount={cards.filter(c => c.status === ProcessingStatus.Completed).length}
+          sliderPos={compareSliderPos}
+          onSliderChange={setCompareSliderPos}
+          compareFormat={compareFormat}
+          onFormatChange={setCompareFormat}
+          onOpenLightbox={() => {
+            setCompareActiveCardId(cards[0]?.id || null);
+            setIsCompareLightboxOpen(true);
+          }}
+          onEnhanceAllPending={() => handleApplyEnhancementsToAll(undefined, true)}
+          isProcessing={isBatchRendering}
+        />
+      )}
+
+      {/* Main Workspace Layout */}
+      <div {...getRootProps()} className="flex-1 flex overflow-hidden relative">
+        <input {...getInputProps()} />
+
+        {/* Global Drag Overlay */}
+        {isDragActive && (
+          <div className="absolute inset-0 z-50 bg-black/90 backdrop-blur-md border-4 border-dashed border-cyan-400 flex flex-col items-center justify-center p-8 transition-all pointer-events-none">
+            <div className="p-5 rounded-2xl bg-cyan-400/20 border border-cyan-400 text-cyan-300 mb-4 shadow-[0_0_30px_rgba(0,243,255,0.6)] animate-bounce">
+              <Upload className="w-12 h-12" />
+            </div>
+            <h3 className="text-2xl font-bold font-mono text-cyan-300 tracking-tight">Drop Cards, Folders or ZIPs Here</h3>
+            <p className="text-sm font-mono text-slate-300 mt-2 text-center max-w-md">
+              Automatically extracting image scans and loading them into the high-performance batch queue
+            </p>
+          </div>
+        )}
+
+        {/* Center Card Grid */}
+        <div className="flex-1 p-5 md:p-7 overflow-y-auto relative bg-[#070b12]">
+          
+          {/* Interrupted Session Recovery Banner */}
+          {savedSession && (
+            <BatchRecoveryBanner
+              savedCards={savedSession.cards}
+              savedAt={savedSession.savedAt}
+              onResumeProcessing={() => handleResumeSession(true)}
+              onRestoreToQueue={() => handleResumeSession(false)}
+              onDiscardSession={handleDiscardSession}
+            />
+          )}
+
+          {cards.length === 0 ? (
+             <div 
+               onClick={() => fileInputRef.current?.click()}
+               className="h-full min-h-[420px] border-2 border-dashed border-cyan-500/30 bg-cyan-500/[0.02] rounded-xl flex flex-col items-center justify-center text-cyan-300/70 cursor-pointer hover:border-cyan-400 hover:bg-cyan-500/[0.05] transition-all group p-8"
+             >
+               <div className="w-16 h-16 rounded-2xl flex items-center justify-center mb-4 bg-cyan-950/60 border border-cyan-500/40 text-cyan-400 shadow-[0_0_25px_rgba(0,243,255,0.2)] group-hover:scale-105 transition-all">
+                  <Upload size={28} />
+               </div>
+               <p className="font-mono text-base font-bold text-cyan-300">Drop Card Scans or Folders to Begin</p>
+               <p className="text-xs font-mono text-slate-400 mt-1.5 text-center max-w-md">
+                 Batch enhance contrast, remove scratches & scanner dust, sharpen details, and auto-crop standard trading cards in full resolution.
+               </p>
+               
+               <div className="mt-6 flex flex-wrap items-center justify-center gap-3">
+                 <button
+                   id="btn-select-cards"
+                   onClick={(e) => {
+                     e.stopPropagation();
+                     fileInputRef.current?.click();
+                   }}
+                   className="px-5 py-2.5 bg-cyan-500 hover:bg-cyan-400 text-slate-950 font-bold rounded-lg font-mono text-xs transition-all shadow-[0_0_20px_rgba(0,243,255,0.3)] flex items-center gap-2"
+                 >
+                   <Upload size={16} /> Select Card Images
+                 </button>
+
+                 <button
+                   id="btn-load-sample-cards"
+                   onClick={(e) => {
+                     e.stopPropagation();
+                     handleLoadSampleCards();
+                   }}
+                   className="px-4 py-2.5 bg-slate-900 hover:bg-slate-800 border border-cyan-500/40 text-cyan-300 font-bold rounded-lg font-mono text-xs transition-all flex items-center gap-2 shadow-sm"
+                   title="Load 4 sample raw wrestling cards (WWE Prizm, AEW Diamond, 1985 WWF, WCW Nitro)"
+                 >
+                   <Sparkles size={15} /> Load 4 Raw Wrestling Cards
+                 </button>
+
+                 <button
+                   id="btn-load-tested-cards"
+                   onClick={(e) => {
+                     e.stopPropagation();
+                     handleLoadTestedCards();
+                   }}
+                   className="px-4 py-2.5 bg-emerald-950/80 hover:bg-emerald-900 border border-emerald-500/50 text-emerald-300 font-bold rounded-lg font-mono text-xs transition-all flex items-center gap-2 shadow-sm"
+                   title="Load all 8 verified AEW Black Diamond test cards (0960, 0968, 1018-1032)"
+                 >
+                   <CheckCircle2 size={15} className="text-emerald-400" /> Load 8 Tested AEW Cards (0960 - 1032)
+                 </button>
+               </div>
+             </div>
+          ) : (
+            <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-4 relative z-0">
+              {cards.map(card => {
+                const isCompare = previewMode === 'compare';
+                const currentImgSrc = (previewMode === 'enhanced' && card.processedUrl) 
+                  ? card.processedUrl 
+                  : card.previewUrl;
+
+                return (
+                  <div 
+                    key={card.id} 
+                    id={`card-item-${card.id}`}
+                    className={`group relative bg-[#0d1424] rounded-lg overflow-hidden shadow-lg transition-all flex flex-col cursor-pointer ${
+                      card.cropStatus === 'detecting'
+                        ? 'border-2 border-amber-400 shadow-[0_0_20px_rgba(245,158,11,0.5)] animate-pulse'
+                        : isCompare 
+                        ? 'border-2 border-indigo-500/50 hover:border-cyan-400 hover:shadow-[0_4px_25px_rgba(99,102,241,0.35)]' 
+                        : 'border border-cyan-500/25 hover:border-cyan-400 hover:shadow-[0_4px_25px_rgba(0,243,255,0.25)]'
+                    }`}
+                    onClick={() => {
+                      if (isCompare) {
+                        setCompareActiveCardId(card.id);
+                        setIsCompareLightboxOpen(true);
+                      } else {
+                        setEditingCard(card);
+                      }
+                    }}
+                  >
+                    <div className="aspect-[3/4] relative bg-black/80 p-2 flex items-center justify-center overflow-hidden select-none">
+                      
+                      {/* Compare Mode Split Curtain View */}
+                      {isCompare && compareFormat === 'split' ? (
+                        <div className="relative w-full h-full flex items-center justify-center overflow-hidden">
+                          {/* Background: Enhanced / Cropped */}
+                          <img 
+                            src={card.processedUrl || card.previewUrl} 
+                            alt="Enhanced" 
+                            className="w-full h-full object-contain rounded pointer-events-none" 
+                          />
+                          {/* Foreground: Raw Original Scan (Clipped to slider position) */}
+                          <div 
+                            className="absolute inset-0 overflow-hidden pointer-events-none flex items-center justify-center"
+                            style={{
+                              clipPath: `polygon(0 0, ${compareSliderPos}% 0, ${compareSliderPos}% 100%, 0 100%)`
+                            }}
+                          >
+                            <img 
+                              src={card.previewUrl} 
+                              alt="Original" 
+                              className="w-full h-full object-contain rounded" 
+                            />
+                          </div>
+                          {/* Neon Cyan Dividing Curtain Line */}
+                          <div 
+                            className="absolute top-0 bottom-0 w-0.5 bg-cyan-400 pointer-events-none shadow-[0_0_8px_#00f3ff] z-10"
+                            style={{ left: `${compareSliderPos}%` }}
+                          />
+                          {/* Top Tag Badges */}
+                          <div className="absolute top-1 left-1 z-10 bg-black/80 border border-slate-700 text-slate-300 px-1 py-0.5 rounded text-[8px] font-mono font-bold">
+                            ORIG
+                          </div>
+                          <div className="absolute top-1 right-1 z-10 bg-emerald-500/90 text-slate-950 px-1 py-0.5 rounded text-[8px] font-mono font-black">
+                            ENH
+                          </div>
+                        </div>
+                      ) : isCompare && compareFormat === 'side-by-side' ? (
+                        /* Compare Mode Side-by-Side Dual View */
+                        <div className="w-full h-full grid grid-cols-2 gap-1 p-0.5">
+                          <div className="relative w-full h-full bg-black/60 rounded flex items-center justify-center overflow-hidden border border-slate-800">
+                            <img src={card.previewUrl} alt="Original" className="max-w-full max-h-full object-contain" />
+                            <span className="absolute top-0.5 left-0.5 bg-black/80 text-slate-300 px-1 py-0.2 rounded text-[7px] font-mono font-bold">ORIG</span>
+                          </div>
+                          <div className="relative w-full h-full bg-black/60 rounded flex items-center justify-center overflow-hidden border border-cyan-500/40">
+                            <img src={card.processedUrl || card.previewUrl} alt="Enhanced" className="max-w-full max-h-full object-contain" />
+                            <span className="absolute top-0.5 right-0.5 bg-emerald-500 text-slate-950 px-1 py-0.2 rounded text-[7px] font-mono font-bold">ENH</span>
+                          </div>
+                        </div>
+                      ) : (
+                        /* Standard Single View (Enhanced or Original) */
+                        <img 
+                          src={currentImgSrc} 
+                          alt={card.file.name} 
+                          className={`w-full h-full object-contain rounded transition-all ${
+                            card.status === ProcessingStatus.Processing ? 'opacity-50 blur-sm scale-[0.98]' : 'scale-100'
+                          }`} 
+                        />
+                      )}
+                      
+                      {/* Status Badges */}
+                      <div className="absolute top-2 left-2 flex flex-col gap-1 z-10 pointer-events-none">
+                        {/* Auto-Crop Live Status */}
+                        {card.cropStatus === 'detecting' && (
+                          <div className="bg-amber-400 text-slate-950 px-1.5 py-0.5 rounded text-[9px] font-bold font-mono flex items-center gap-1 animate-pulse shadow-[0_0_12px_rgba(245,158,11,0.9)]">
+                            <Loader2 size={10} className="animate-spin text-slate-950" /> CROPPING...
+                          </div>
+                        )}
+                        {card.cropStatus === 'detected' && !card.processedUrl && (
+                          <div className="bg-amber-500/90 text-slate-950 px-1.5 py-0.5 rounded text-[8.5px] font-bold font-mono flex items-center gap-1 shadow-[0_0_8px_rgba(245,158,11,0.5)]">
+                            <CheckCircle2 size={10} /> EDGE DETECTED
+                          </div>
+                        )}
+                        {card.cropStatus === 'failed' && (
+                          <div className="bg-red-500 text-white px-1.5 py-0.5 rounded text-[8.5px] font-bold font-mono flex items-center gap-1 shadow-sm">
+                            <X size={10} /> CROP FAILED
+                          </div>
+                        )}
+
+                        {!isCompare && (
+                          <>
+                            {card.status === ProcessingStatus.Completed && (
+                              <div className="bg-emerald-500/90 text-slate-950 px-1.5 py-0.5 rounded text-[10px] font-bold font-mono flex items-center gap-1 shadow-[0_0_8px_rgba(16,185,129,0.5)]">
+                                <CheckCircle2 size={11} /> ENHANCED
+                              </div>
+                            )}
+                            {card.status === ProcessingStatus.Processing && (
+                              <div className="bg-cyan-500/90 text-slate-950 px-1.5 py-0.5 rounded text-[10px] font-bold font-mono flex items-center gap-1 animate-pulse">
+                                <Loader2 size={11} className="animate-spin" /> WORKING
+                              </div>
+                            )}
+                            {card.status === ProcessingStatus.Failed && (
+                              <div className="bg-red-500 text-white px-1.5 py-0.5 rounded text-[10px] font-bold font-mono">
+                                FAILED
+                              </div>
+                            )}
+                          </>
+                        )}
+                      </div>
+
+                      {/* Top Right Quick Delete */}
+                      <button 
+                        onClick={(e) => {
+                            e.stopPropagation();
+                            URL.revokeObjectURL(card.previewUrl);
+                            if (card.processedUrl && card.processedUrl.startsWith('blob:')) {
+                              URL.revokeObjectURL(card.processedUrl);
+                            }
+                            setCards(prev => prev.filter(c => c.id !== card.id));
+                            if (selectedCardForView?.id === card.id) setSelectedCardForView(null);
+                            if (editingCard?.id === card.id) setEditingCard(null);
+                        }}
+                        className="absolute top-2 right-2 bg-black/70 hover:bg-red-500 p-1.5 rounded text-slate-300 hover:text-white opacity-0 group-hover:opacity-100 transition-all border border-slate-700 hover:border-red-400 z-10"
+                        title="Remove from batch"
+                      >
+                        <X size={12} />
+                      </button>
+
+                      {/* Bottom Action Bar on Hover */}
+                      <div className="absolute bottom-2 left-2 right-2 flex items-center justify-between opacity-0 group-hover:opacity-100 transition-all z-10 gap-1.5">
+                        <button 
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            setCompareActiveCardId(card.id);
+                            setIsCompareLightboxOpen(true);
+                          }}
+                          className="flex-1 bg-indigo-600 hover:bg-indigo-500 text-white py-1 px-1.5 rounded text-[10px] font-mono font-bold flex items-center justify-center gap-1 shadow-md transition-colors"
+                          title="Open in Compare Lightbox"
+                        >
+                          <Maximize2 size={11} /> Compare
+                        </button>
+                        <button 
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            setEditingCard(card);
+                          }}
+                          className="flex-1 bg-cyan-500 hover:bg-cyan-400 text-slate-950 py-1 px-1.5 rounded text-[10px] font-mono font-bold flex items-center justify-center gap-1 shadow-md transition-colors"
+                          title="Fine-tune edge quad crop"
+                        >
+                          <Crop size={11} /> Quad
+                        </button>
+                      </div>
+                    </div>
+
+                    {/* Card Label Footer */}
+                    <div className="p-2.5 bg-[#090e1a] border-t border-cyan-500/15 flex flex-col gap-0.5">
+                       <span className="text-[11px] font-mono text-cyan-200 truncate font-semibold" title={card.file.name}>
+                         {card.file.name}
+                       </span>
+                       {(card.metadata?.cardSeries || card.metadata?.setName) && (
+                         <span className="text-[10px] font-mono text-cyan-400 truncate flex items-center gap-1 font-semibold">
+                           <Tag size={10} className="text-cyan-400 shrink-0" />
+                           {card.metadata.year ? `${card.metadata.year} ` : ''}
+                           {card.metadata.cardSeries || ''}
+                           {card.metadata.setName ? ` [${card.metadata.setName}]` : ''}
+                         </span>
+                       )}
+                       <div className="flex justify-between items-center text-[10px] font-mono text-slate-400">
+                         <span>{card.originalWidth ? `${card.originalWidth}x${card.originalHeight}` : 'Loading...'}</span>
+                         {card.cropStatus === 'detecting' ? (
+                           <span className="text-amber-400 font-bold flex items-center gap-1 animate-pulse">
+                             <Loader2 size={10} className="animate-spin" /> Cropping
+                           </span>
+                         ) : card.centering ? (
+                           <span className="text-amber-300 font-mono text-[9px] flex items-center gap-1 font-semibold" title={`Centering: L/R ${card.centering.leftRightRatio}, T/B ${card.centering.topBottomRatio}, Symmetry: ${card.centering.symmetryScore}%`}>
+                             <Crop size={9} className="text-amber-400 shrink-0" />
+                             <span>{card.centering.leftRightRatio}</span>
+                             <span className="text-emerald-400">({card.centering.symmetryScore}%)</span>
+                           </span>
+                         ) : card.processedUrl ? (
+                           <span className="text-emerald-400 font-bold">100% High-Res</span>
+                         ) : (
+                           <span className="text-amber-400/80 font-mono text-[9px]">Pending</span>
+                         )}
+                       </div>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          )}
+        </div>
+
+        {/* Right Settings & Filter Sidebar */}
+        <div className="w-80 md:w-88 border-l border-cyan-500/20 flex flex-col z-20 bg-[#0a0f1d]">
+          
+          <div className="p-3.5 border-b border-cyan-500/20 flex items-center justify-between bg-[#0e1526]">
+            <div className="flex items-center gap-2">
+                <div className="p-1 rounded bg-cyan-500/10 border border-cyan-400/30 text-cyan-300">
+                    <Sliders size={14} />
+                </div>
+                <h3 className="font-bold text-xs text-cyan-300 uppercase tracking-wide font-mono">
+                  Batch Controls & Filters
+                </h3>
+            </div>
+            <button
+              onClick={handleResetEnhancements}
+              className="text-[10px] font-mono text-slate-400 hover:text-cyan-300 flex items-center gap-1 transition-colors"
+              title="Reset all settings to default"
+            >
+              <RefreshCw size={10} /> Reset
+            </button>
+          </div>
+
+          <div className="p-4 space-y-4 overflow-y-auto flex-1 custom-scrollbar text-slate-200">
+            
+            {/* 1-Click Wrestling Raw Card Optimization Presets */}
+            <div className="p-3 bg-[#0d1424] border border-cyan-500/30 rounded-lg space-y-2 shadow-sm">
+               <div className="flex items-center justify-between mb-1">
+                  <label className="text-[11px] font-bold text-cyan-300 uppercase font-mono flex items-center gap-1.5">
+                    <Award size={13} className="text-cyan-400" /> Wrestling Raw Card Presets
+                  </label>
+                  <span className="text-[9px] font-mono px-1.5 py-0.5 rounded bg-cyan-500/10 text-cyan-400 border border-cyan-500/20 font-bold">
+                    1-CLICK OPTIMIZE
+                  </span>
+               </div>
+               <p className="text-[10px] font-mono text-slate-400 leading-tight">
+                 Pre-tuned optical profiles calibrated for raw wrestling cards, chromium refractor foil, vintage pulp, and raw surface scuffs:
+               </p>
+               <div className="space-y-1.5 pt-1">
+                 {SPORTS_CARD_PRESETS.map(preset => {
+                   const isActive = activePresetId === preset.id;
+                   return (
+                     <button
+                       key={preset.id}
+                       onClick={() => applySportsPreset(preset.id)}
+                       className={`w-full text-left p-2 rounded-md border transition-all flex flex-col gap-0.5 ${
+                         isActive 
+                           ? 'bg-cyan-950/70 border-cyan-400 text-cyan-200 shadow-[0_0_12px_rgba(0,243,255,0.2)]' 
+                           : 'bg-black/40 border-slate-800 text-slate-300 hover:border-cyan-500/40 hover:bg-black/60'
+                       }`}
+                     >
+                       <div className="flex items-center justify-between">
+                         <span className="text-[11px] font-bold font-mono text-cyan-300 flex items-center gap-1">
+                           {preset.name}
+                         </span>
+                         <span className={`text-[8px] font-mono font-bold px-1 py-0.5 rounded ${
+                           isActive ? 'bg-cyan-400 text-slate-950' : 'bg-slate-800 text-slate-400'
+                         }`}>
+                           {preset.badge}
+                         </span>
+                       </div>
+                       <span className="text-[9px] font-mono text-slate-400 leading-snug">
+                         {preset.desc}
+                       </span>
+                     </button>
+                   );
+                 })}
+               </div>
+            </div>
+
+            {/* Auto-Crop & Centering */}
+            <div className="p-3 bg-[#0d1424] border border-cyan-500/20 rounded-lg space-y-2.5">
+               <div className="flex items-center justify-between">
+                  <label className="text-[11px] font-bold text-cyan-300 uppercase font-mono flex items-center gap-1.5">
+                    <Crop size={13} /> Auto-Crop & Perspective
+                  </label>
+                  <input 
+                    type="checkbox" 
+                    checked={settings.autoCrop}
+                    onChange={(e) => setSettings({...settings, autoCrop: e.target.checked})}
+                    className="w-4 h-4 accent-cyan-400 rounded cursor-pointer"
+                  />
+               </div>
+
+               {settings.autoCrop && (
+                 <div className="space-y-1 pt-1">
+                   <div className="flex justify-between text-[10px] font-mono text-slate-400">
+                     <span>Target Aspect Ratio:</span>
+                     <span className="text-cyan-300 font-bold">Standard (2.5 : 3.5)</span>
+                   </div>
+                   <div className="grid grid-cols-2 gap-1.5 text-[10px] font-mono">
+                     <button
+                       onClick={() => setSettings({...settings, aspectRatio: 2.5 / 3.5})}
+                       className={`p-1.5 rounded border text-center transition-colors ${
+                         Math.abs(settings.aspectRatio - 2.5/3.5) < 0.01 
+                           ? 'bg-cyan-500/20 border-cyan-400 text-cyan-300 font-bold' 
+                           : 'bg-black/30 border-slate-700 text-slate-400'
+                       }`}
+                     >
+                       Raw Standard 2.5x3.5
+                     </button>
+                     <button
+                       onClick={() => {
+                         setSettings(prev => ({...prev, aspectRatio: 500 / 700, jpegQuality: 85}));
+                         addLog('[Format] Selected eBay 500x700 Fast Upload standard (85% JPEG quality, 2.5:3.5 raw ratio)');
+                       }}
+                       className={`p-1.5 rounded border text-center transition-colors ${
+                         Math.abs(settings.aspectRatio - 500/700) < 0.01 
+                           ? 'bg-cyan-500/20 border-cyan-400 text-cyan-300 font-bold' 
+                           : 'bg-black/30 border-slate-700 text-slate-400'
+                       }`}
+                       title="eBay Fast Upload Listing Ratio (500px width × 700px height)"
+                     >
+                       eBay 500x700 Raw
+                     </button>
+                   </div>
+
+                   <button
+                     id="btn-sidebar-bulk-auto-crop"
+                     onClick={handleBulkAutoCrop}
+                     disabled={cards.length === 0 || isBulkCropping || isBatchRendering}
+                     className="w-full mt-2.5 py-2 px-3 rounded-md bg-amber-500/20 hover:bg-amber-500/30 border border-amber-400/60 text-amber-300 hover:text-amber-200 text-xs font-mono font-bold flex items-center justify-center gap-2 transition-all shadow-[0_0_12px_rgba(245,158,11,0.2)] disabled:opacity-40 disabled:cursor-not-allowed"
+                     title="Detect card boundaries & edges for all cards in the batch queue simultaneously"
+                   >
+                     {isBulkCropping ? <Loader2 size={13} className="animate-spin text-amber-300" /> : <Crop size={13} className="text-amber-400" />}
+                     <span>{isBulkCropping ? `Auto-Cropping (${bulkCropProgress?.processed || 0}/${cards.length})...` : `Bulk Auto-Crop All (${cards.length})`}</span>
+                   </button>
+                 </div>
+               )}
+            </div>
+
+            {/* Hardware Filters & Descratching Toggles */}
+            <div className="p-3 bg-[#0d1424] border border-cyan-500/20 rounded-lg space-y-2.5">
+               <label className="text-[11px] font-bold text-cyan-300 uppercase font-mono flex items-center gap-1.5 mb-1">
+                 <Wand2 size={13} /> Restoration & Repair Filters
+               </label>
+
+               <label className="flex items-center justify-between p-2 bg-black/40 rounded border border-slate-800 hover:border-cyan-500/40 transition-colors cursor-pointer">
+                  <div className="flex flex-col">
+                    <span className="text-[11px] font-mono text-cyan-200 flex items-center gap-1.5">
+                      Descratch & Surface Polish
+                    </span>
+                    <span className="text-[9px] font-mono text-slate-400">
+                      Removes hairline scratches & surface scuffs
+                    </span>
+                  </div>
+                  <input 
+                    type="checkbox" 
+                    checked={settings.enableDescratching}
+                    onChange={(e) => setSettings({...settings, enableDescratching: e.target.checked})}
+                    className="w-4 h-4 accent-cyan-400 rounded cursor-pointer"
+                  />
+               </label>
+
+               <label className="flex items-center justify-between p-2 bg-black/40 rounded border border-slate-800 hover:border-cyan-500/40 transition-colors cursor-pointer">
+                  <div className="flex flex-col">
+                    <span className="text-[11px] font-mono text-cyan-200 flex items-center gap-1.5">
+                      Micro-Dust & Speckle Cleaner
+                    </span>
+                    <span className="text-[9px] font-mono text-slate-400">
+                      Suppresses scanner glass dust particles
+                    </span>
+                  </div>
+                  <input 
+                    type="checkbox" 
+                    checked={!!settings.microDustFilter}
+                    onChange={(e) => setSettings({...settings, microDustFilter: e.target.checked})}
+                    className="w-4 h-4 accent-cyan-400 rounded cursor-pointer"
+                  />
+               </label>
+
+               <label className="flex items-center justify-between p-2 bg-black/40 rounded border border-slate-800 hover:border-cyan-500/40 transition-colors cursor-pointer">
+                  <div className="flex flex-col">
+                    <span className="text-[11px] font-mono text-cyan-200 flex items-center gap-1.5">
+                      Anti-Glare & Highlight Recovery
+                    </span>
+                    <span className="text-[9px] font-mono text-slate-400">
+                      Recovers washed-out chrome / foil parallels
+                    </span>
+                  </div>
+                  <input 
+                    type="checkbox" 
+                    checked={!!settings.antiGlare}
+                    onChange={(e) => setSettings({...settings, antiGlare: e.target.checked})}
+                    className="w-4 h-4 accent-cyan-400 rounded cursor-pointer"
+                  />
+               </label>
+
+               <label className="flex items-center justify-between p-2 bg-black/40 rounded border border-slate-800 hover:border-cyan-500/40 transition-colors cursor-pointer">
+                  <div className="flex flex-col">
+                    <span className="text-[11px] font-mono text-cyan-200 flex items-center gap-1.5">
+                      Refractor & Foil Hologram Pop
+                    </span>
+                    <span className="text-[9px] font-mono text-slate-400">
+                      Boosts prizm / speckle foil micro-contrast
+                    </span>
+                  </div>
+                  <input 
+                    type="checkbox" 
+                    checked={!!settings.chromeParallelClarity}
+                    onChange={(e) => setSettings({...settings, chromeParallelClarity: e.target.checked})}
+                    className="w-4 h-4 accent-cyan-400 rounded cursor-pointer"
+                  />
+               </label>
+            </div>
+
+            {/* Manual Color & Contrast Sliders */}
+            <div className="p-3 bg-[#0d1424] border border-cyan-500/20 rounded-lg space-y-3">
+               <label className="text-[11px] font-bold text-cyan-300 uppercase font-mono flex items-center gap-1.5">
+                 <Sliders size={13} /> Optical Adjustments
+               </label>
+
+               {/* Contrast */}
+               <div className="space-y-1">
+                  <div className="flex justify-between items-center text-[10px] font-mono">
+                     <span className="text-slate-300">Contrast</span>
+                     <span className="text-cyan-300 font-bold">{settings.contrast.toFixed(2)}x</span>
+                  </div>
+                  <input
+                     type="range"
+                     min="0.5"
+                     max="2.2"
+                     step="0.05"
+                     value={settings.contrast}
+                     onChange={(e) => setSettings({...settings, contrast: parseFloat(e.target.value)})}
+                     className="w-full accent-cyan-400 h-1.5 bg-slate-800 rounded appearance-none cursor-pointer"
+                  />
+               </div>
+
+               {/* Sharpening */}
+               <div className="space-y-1">
+                  <div className="flex justify-between items-center text-[10px] font-mono">
+                     <span className="text-slate-300">Sharpening (Unsharp Mask)</span>
+                     <span className="text-cyan-300 font-bold">{Math.round(settings.sharpen * 100)}%</span>
+                  </div>
+                  <input
+                     type="range"
+                     min="0.0"
+                     max="1.2"
+                     step="0.05"
+                     value={settings.sharpen}
+                     onChange={(e) => setSettings({...settings, sharpen: parseFloat(e.target.value)})}
+                     className="w-full accent-cyan-400 h-1.5 bg-slate-800 rounded appearance-none cursor-pointer"
+                  />
+               </div>
+
+               {/* Brightness */}
+               <div className="space-y-1">
+                  <div className="flex justify-between items-center text-[10px] font-mono">
+                     <span className="text-slate-300">Brightness</span>
+                     <span className="text-cyan-300 font-bold">
+                       {settings.brightness > 0 ? `+${Math.round(settings.brightness * 100)}%` : `${Math.round(settings.brightness * 100)}%`}
+                     </span>
+                  </div>
+                  <input
+                     type="range"
+                     min="-0.4"
+                     max="0.4"
+                     step="0.02"
+                     value={settings.brightness}
+                     onChange={(e) => setSettings({...settings, brightness: parseFloat(e.target.value)})}
+                     className="w-full accent-cyan-400 h-1.5 bg-slate-800 rounded appearance-none cursor-pointer"
+                  />
+               </div>
+
+               {/* Vibrance */}
+               <div className="space-y-1">
+                  <div className="flex justify-between items-center text-[10px] font-mono">
+                     <span className="text-slate-300">Color Vibrance</span>
+                     <span className="text-cyan-300 font-bold">
+                       {settings.vibrance > 0 ? `+${Math.round(settings.vibrance * 100)}%` : `${Math.round(settings.vibrance * 100)}%`}
+                     </span>
+                  </div>
+                  <input
+                     type="range"
+                     min="-0.4"
+                     max="0.6"
+                     step="0.05"
+                     value={settings.vibrance}
+                     onChange={(e) => setSettings({...settings, vibrance: parseFloat(e.target.value)})}
+                     className="w-full accent-cyan-400 h-1.5 bg-slate-800 rounded appearance-none cursor-pointer"
+                  />
+               </div>
+            </div>
+
+            {/* Execution CTA in Sidebar */}
+            <div className="space-y-2 pt-1">
+               <button
+                 id="btn-sidebar-bulk-enhance"
+                 onClick={() => handleBulkEnhance()}
+                 disabled={cards.length === 0 || isBatchRendering || isProcessing}
+                 className="w-full py-2.5 rounded-lg bg-cyan-400 hover:bg-cyan-300 text-slate-950 font-mono font-bold text-xs flex items-center justify-center gap-2 shadow-[0_0_15px_rgba(0,243,255,0.3)] disabled:opacity-40 disabled:cursor-not-allowed transition-all"
+                 title="Bulk Enhance: Apply active brightness, contrast, and descratching settings across all queued cards"
+               >
+                 {isBatchRendering ? <Loader2 className="animate-spin text-slate-950" size={14} /> : <Sparkles size={14} />}
+                 <span>BULK ENHANCE ALL ({cards.length}) CARDS</span>
+               </button>
+            </div>
+
+            {/* Activity Log */}
+            <div className="space-y-1.5 pt-2 border-t border-cyan-500/20">
+                <div className="flex items-center justify-between text-[10px] font-mono text-cyan-300 font-bold uppercase">
+                    <span>Batch Execution Log</span>
+                    <span className="text-emerald-400 animate-pulse">LIVE</span>
+                </div>
+                <div className="h-32 bg-black/60 border border-slate-800 p-2 rounded overflow-y-auto text-[9px] font-mono text-slate-300 custom-scrollbar">
+                    {logs.length === 0 && <span className="text-slate-500">Ready. Drag cards to begin...</span>}
+                    {logs.map((log, i) => (
+                        <div key={i} className="mb-0.5 leading-relaxed">
+                            {log.includes('ERROR') ? <span className="text-red-400">{log}</span> :
+                             log.includes('Processed') || log.includes('download') ? <span className="text-emerald-400">{log}</span> : log}
+                        </div>
+                    ))}
+                    <div ref={logsEndRef}></div>
+                </div>
+            </div>
+
+          </div>
+        </div>
+      </div>
+
+      {/* Single Item Fine-Tune Modal */}
+      {editingCard && (
+        <BatchItemEditorModal
+          card={editingCard}
+          globalSettings={settings}
+          isOpen={!!editingCard}
+          onClose={() => setEditingCard(null)}
+          onSave={(updatedCard) => {
+            setCards(prev => prev.map(c => c.id === updatedCard.id ? updatedCard : c));
+            setEditingCard(null);
+            addLog(`Saved fine-tuned settings for "${updatedCard.file.name}".`);
+          }}
+        />
+      )}
+
+      {/* Fullscreen Multi-Card Compare Lightbox Modal */}
+      {isCompareLightboxOpen && cards.length > 0 && (
+        <BatchCompareLightboxModal
+          cards={cards}
+          activeCardId={compareActiveCardId || cards[0].id}
+          isOpen={isCompareLightboxOpen}
+          onClose={() => setIsCompareLightboxOpen(false)}
+          onSelectCard={(id) => setCompareActiveCardId(id)}
+          onOpenEditor={(card) => {
+            setEditingCard(card);
+            setIsCompareLightboxOpen(false);
+          }}
+          onUpdateCard={(updatedCard) => {
+            setCards(prev => prev.map(c => c.id === updatedCard.id ? updatedCard : c));
+          }}
+          globalSettings={settings}
+          onEnhanceAllPending={() => handleApplyEnhancementsToAll(undefined, true)}
+        />
+      )}
+
+      {/* Bulk Metadata Editor Modal */}
+      <BatchMetadataModal
+        isOpen={isMetadataModalOpen}
+        totalCards={cards.length}
+        onClose={() => setIsMetadataModalOpen(false)}
+        onApply={handleApplyBulkMetadata}
+      />
+
+      {/* Batch Metadata CSV Export Modal (Catalog & eBay Cat #261328) */}
+      <BatchMetadataCsvModal
+        isOpen={isCsvModalOpen}
+        cards={cards}
+        onClose={() => setIsCsvModalOpen(false)}
+        onDownloadZip={handleDownloadBatchZip}
+      />
+
+      {/* Global Settings Modal */}
+      <SettingsModal
+        isOpen={isSettingsModalOpen}
+        onClose={() => setIsSettingsModalOpen(false)}
+      />
+
+      {/* Floating User Feedback Toast upon Bulk Enhancement Completion & Pipeline Updates */}
+      {enhancementToast && (
+        <div 
+          id="enhancement-completion-toast"
+          role="status"
+          aria-live="polite"
+          className="fixed bottom-6 right-6 z-50 max-w-md w-full bg-[#0a0f1d]/95 border border-cyan-500/40 rounded-xl p-4 shadow-[0_0_30px_rgba(0,243,255,0.3)] backdrop-blur-md animate-fade-in flex flex-col gap-2"
+        >
+          <div className="flex items-start justify-between gap-3">
+            <div className="flex items-center gap-2.5">
+              <div className={`p-2 rounded-lg ${
+                enhancementToast.type === 'error' 
+                  ? 'bg-red-500/20 text-red-400 border border-red-500/30' 
+                  : enhancementToast.type === 'warning'
+                  ? 'bg-amber-500/20 text-amber-300 border border-amber-500/30'
+                  : 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/30 shadow-[0_0_12px_rgba(16,185,129,0.3)]'
+              }`}>
+                {enhancementToast.type === 'error' ? (
+                  <X size={18} />
+                ) : enhancementToast.type === 'warning' ? (
+                  <AlertTriangle size={18} />
+                ) : (
+                  <CheckCircle2 size={18} />
+                )}
+              </div>
+              <div>
+                <h4 className="text-xs font-mono font-bold text-slate-100 flex items-center gap-2">
+                  <span>{enhancementToast.title}</span>
+                  <span className="text-[10px] text-slate-400 font-normal">[{enhancementToast.timestamp}]</span>
+                </h4>
+                <p className="text-[11px] font-mono text-slate-300 leading-snug mt-0.5">
+                  {enhancementToast.message}
+                </p>
+              </div>
+            </div>
+            <button 
+              onClick={() => setEnhancementToast(null)}
+              className="p-1 rounded text-slate-400 hover:text-white hover:bg-white/10 transition-colors"
+              title="Close feedback toast"
+              aria-label="Close"
+            >
+              <X size={14} />
+            </button>
+          </div>
+
+          {/* Applied Settings Pill Summary */}
+          <div className="pt-2 mt-1 border-t border-cyan-500/15 flex flex-wrap items-center justify-between gap-2 text-[10px] font-mono text-slate-400">
+            <span className="text-cyan-300 truncate max-w-xs flex items-center gap-1">
+              <Sliders size={11} className="text-cyan-400 shrink-0" />
+              <span className="text-slate-400">Settings:</span> {enhancementToast.settingsSummary}
+            </span>
+            <span className="text-[9px] px-1.5 py-0.5 rounded bg-cyan-950 border border-cyan-500/30 text-cyan-300 font-bold">
+              {enhancementToast.count} ENHANCED
+            </span>
+          </div>
+        </div>
+      )}
+
+    </div>
+  );
+};
+
+export default BatchCropper;

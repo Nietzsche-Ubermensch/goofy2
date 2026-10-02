@@ -1,0 +1,113 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <link rel="stylesheet" href="styles.css">
+  <title>Foundations — Card Suite Unified</title>
+  <style>
+    body { background: #000000; padding: 32px; font-family: var(--csu-font-ui); color: #ededed; }
+    .section-title { font-size: 16px; font-weight: 700; margin: 32px 0 16px; padding-bottom: 8px; border-bottom: 1px solid #222; }
+    .swatch-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(180px, 1fr)); gap: 12px; }
+    .swatch { border-radius: 8px; border: 1px solid #222; overflow: hidden; background: #121212; }
+    .color-block { height: 60px; width: 100%; }
+    .info { padding: 10px; font-size: 11px; }
+    .name { font-weight: 600; color: #ededed; }
+    .hex { font-family: var(--csu-font-mono); color: #888; font-size: 10px; margin-top: 2px; }
+    .scale-row { display: flex; gap: 8px; align-items: flex-end; margin-top: 12px; }
+    .scale-box { background: #1c1c1c; border: 1px solid #ffb000; border-radius: 4px; display: flex; align-items: center; justify-content: center; font-size: 10px; font-family: var(--csu-font-mono); color: #ffb000; }
+  </style>
+</head>
+<body>
+  <header style="margin-bottom: 32px;">
+    <div style="display: flex; align-items: center; gap: 10px;">
+      <span style="display: inline-block; width: 12px; height: 12px; background: #ffb000; border-radius: 2px;"></span>
+      <h1 style="margin: 0; font-size: 24px; font-weight: 800; letter-spacing: -0.02em;">Card Suite Unified — Foundations</h1>
+    </div>
+    <p style="color: #888; font-size: 13px; margin: 8px 0 0;">Dark card-enhancement workspace design tokens ported verbatim from card-suite-unified.</p>
+  </header>
+
+  <!-- Surfaces -->
+  <div class="section-title">1. Surfaces</div>
+  <div class="swatch-grid">
+    <div class="swatch">
+      <div class="color-block" style="background: #000000; border-bottom: 1px solid #222;"></div>
+      <div class="info"><div class="name">App Canvas</div><div class="hex">#000000</div></div>
+    </div>
+    <div class="swatch">
+      <div class="color-block" style="background: #0d0d0d; border-bottom: 1px solid #222;"></div>
+      <div class="info"><div class="name">Header Surface</div><div class="hex">#0d0d0d</div></div>
+    </div>
+    <div class="swatch">
+      <div class="color-block" style="background: #080808; border-bottom: 1px solid #222;"></div>
+      <div class="info"><div class="name">Sidebar Surface</div><div class="hex">#080808</div></div>
+    </div>
+    <div class="swatch">
+      <div class="color-block" style="background: #121212; border-bottom: 1px solid #222;"></div>
+      <div class="info"><div class="name">Panel Surface</div><div class="hex">#121212</div></div>
+    </div>
+    <div class="swatch">
+      <div class="color-block" style="background: #1c1c1c;"></div>
+      <div class="info"><div class="name">Hover Surface</div><div class="hex">#1c1c1c</div></div>
+    </div>
+    <div class="swatch">
+      <div class="color-block" style="background: #262626;"></div>
+      <div class="info"><div class="name">Active Surface</div><div class="hex">#262626</div></div>
+    </div>
+  </div>
+
+  <!-- Accent & Status -->
+  <div class="section-title">2. Accent &amp; Workflow Status</div>
+  <div class="swatch-grid">
+    <div class="swatch">
+      <div class="color-block" style="background: #ffb000;"></div>
+      <div class="info"><div class="name">Amber Accent</div><div class="hex">#ffb000 (hover #ffcc4d)</div></div>
+    </div>
+    <div class="swatch">
+      <div class="color-block" style="background: #00ffff;"></div>
+      <div class="info"><div class="name">Processing</div><div class="hex">#00ffff</div></div>
+    </div>
+    <div class="swatch">
+      <div class="color-block" style="background: #ffffff;"></div>
+      <div class="info"><div class="name">Complete</div><div class="hex">#ffffff</div></div>
+    </div>
+    <div class="swatch">
+      <div class="color-block" style="background: #ffd700;"></div>
+      <div class="info"><div class="name">Review Needed</div><div class="hex">#ffd700</div></div>
+    </div>
+    <div class="swatch">
+      <div class="color-block" style="background: #ff3333;"></div>
+      <div class="info"><div class="name">Failed</div><div class="hex">#ff3333</div></div>
+    </div>
+  </div>
+
+  <!-- Typography -->
+  <div class="section-title">3. Typography</div>
+  <div style="background: #121212; border: 1px solid #222; border-radius: 8px; padding: 20px;">
+    <div style="margin-bottom: 16px;">
+      <span style="font-size: 11px; font-family: var(--csu-font-mono); color: #888;">UI FONT — INTER</span>
+      <div style="font-size: 18px; font-weight: 700; margin-top: 4px;">Upper Deck AEW Black Diamond Card Suite</div>
+      <div style="font-size: 13px; color: #aaa; margin-top: 2px;">The quick brown fox jumps over the lazy dog. 0123456789</div>
+    </div>
+    <div>
+      <span style="font-size: 11px; font-family: var(--csu-font-mono); color: #ffb000;">METRIC &amp; ID FONT — JETBRAINS MONO</span>
+      <div style="font-family: var(--csu-font-mono); font-size: 14px; color: #ededed; margin-top: 4px;">
+        ID: 2024_UD_AEW_0960 | DIMS: 1200x800 | CONF: 94.2% | GATE: 80%
+      </div>
+    </div>
+  </div>
+
+  <!-- Radius & Spacing -->
+  <div class="section-title">4. Radius &amp; Spacing Scale</div>
+  <div style="background: #121212; border: 1px solid #222; border-radius: 8px; padding: 20px;">
+    <p style="font-size: 12px; color: #aaa; margin: 0 0 12px;">Radius: 8px (Panels), 4px (Buttons, Controls, Sliders). Spacing: 4px / 8px / 12px / 16px / 24px / 32px.</p>
+    <div class="scale-row">
+      <div class="scale-box" style="width: 24px; height: 24px;">4</div>
+      <div class="scale-box" style="width: 32px; height: 32px;">8</div>
+      <div class="scale-box" style="width: 40px; height: 40px;">12</div>
+      <div class="scale-box" style="width: 48px; height: 48px;">16</div>
+      <div class="scale-box" style="width: 64px; height: 64px;">24</div>
+      <div class="scale-box" style="width: 80px; height: 80px;">32</div>
+    </div>
+  </div>
+</body>
+</html>

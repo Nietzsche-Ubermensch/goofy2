@@ -1,0 +1,48 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <link rel="stylesheet" href="../../styles.css">
+  <title>MetricMeter Specimen — Card Suite Unified</title>
+  <style>
+    body { background: #000000; padding: 24px; font-family: var(--csu-font-ui); color: #ededed; }
+    .box { background: #121212; border: 1px solid #222; border-radius: 8px; padding: 20px; max-width: 520px; margin-bottom: 20px; }
+  </style>
+</head>
+<body>
+  <h2>MetricMeter Specimen</h2>
+  <p style="color: #888; font-size: 13px;">OCR confidence and metadata quality reward, with the 80% review gate tick.</p>
+
+  <div class="box">
+    <div style="margin-bottom: 28px;">
+      <!-- Passing Confidence -->
+      <div style="display: flex; justify-content: space-between; align-items: baseline; font-size: 12px; margin-bottom: 6px;">
+        <span style="color: #ededed; font-weight: 500;">Player Name &amp; Series Extraction</span>
+        <span class="csu-metric-value" style="color: #ffffff; font-size: 13px; font-weight: 600;">94% <span style="font-size: 10px; color: #888;">(PASS)</span></span>
+      </div>
+      <div style="position: relative; margin-top: 14px;">
+        <div class="csu-meter-track">
+          <div class="csu-meter-fill" style="width: 94%; background-color: #ffffff;"></div>
+          <div class="csu-meter-gate" style="left: 80%;"></div>
+          <span class="csu-meter-gate-label" style="left: 80%;">80% GATE</span>
+        </div>
+      </div>
+    </div>
+
+    <div>
+      <!-- Below Gate Review Needed -->
+      <div style="display: flex; justify-content: space-between; align-items: baseline; font-size: 12px; margin-bottom: 6px;">
+        <span style="color: #ededed; font-weight: 500;">Serial Foil Stamp Stamping OCR</span>
+        <span class="csu-metric-value" style="color: #ffd700; font-size: 13px; font-weight: 600;">68% <span style="font-size: 10px; color: #ffd700;">(REVIEW)</span></span>
+      </div>
+      <div style="position: relative; margin-top: 14px;">
+        <div class="csu-meter-track">
+          <div class="csu-meter-fill" style="width: 68%; background-color: #ffd700;"></div>
+          <div class="csu-meter-gate" style="left: 80%;"></div>
+          <span class="csu-meter-gate-label" style="left: 80%;">80% GATE</span>
+        </div>
+      </div>
+    </div>
+  </div>
+</body>
+</html>
